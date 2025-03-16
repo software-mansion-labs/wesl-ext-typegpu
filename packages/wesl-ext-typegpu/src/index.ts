@@ -1,4 +1,4 @@
-function weslExtensionTypeGPU() {
+function weslExtensionTypeGPU(): void {
   console.log("Bruh");
 }
 
