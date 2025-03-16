@@ -1,7 +1,7 @@
 {
   "name": "wesl-ext-typegpu",
   "version": "0.1.0-alpha.1",
-  "description": "An extension for wesl-plugin that enables reflection of WESL into JS through TypeGPU definitions.",
+  "description": "A WESL extension that enables reflection of WESL code into JS through TypeGPU definitions.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
