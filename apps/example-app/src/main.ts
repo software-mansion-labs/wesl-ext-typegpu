@@ -3,7 +3,10 @@
 import tgpu from "typegpu";
 import { link } from "wesl";
 import linkConfig from "../shaders/main.wesl?link";
+import { Uniforms } from "../shaders/uniforms.wesl?typegpu";
 import "./style.css";
+
+console.log(String(Uniforms));
 
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   <div>

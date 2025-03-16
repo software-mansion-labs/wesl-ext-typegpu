@@ -1,3 +1,5 @@
+import package::uniforms::Uniforms;
+
 struct VertexOutput {
   @builtin(position) position: vec4f,
 }

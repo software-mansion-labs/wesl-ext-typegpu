@@ -47,22 +47,38 @@ importers:
         version: 5.8.2
       vite:
         specifier: ^6.2.0
-        version: 6.2.2(jiti@2.4.2)
+        version: 6.2.2(@types/node@22.13.10)(jiti@2.4.2)
       wesl:
         specifier: 0.6.0-rc1
         version: 0.6.0-rc1
+      wesl-ext-typegpu:
+        specifier: workspace:*
+        version: link:../../packages/wesl-ext-typegpu
       wesl-plugin:
         specifier: 0.6.0-rc1
-        version: 0.6.0-rc1(esbuild@0.25.1)(vite@6.2.2(jiti@2.4.2))
+        version: 0.6.0-rc1(esbuild@0.25.1)(rollup@4.35.0)(vite@6.2.2(@types/node@22.13.10)(jiti@2.4.2))
 
   packages/wesl-ext-typegpu:
+    dependencies:
+      knitwork:
+        specifier: ^1.2.0
+        version: 1.2.0
     devDependencies:
+      '@types/node':
+        specifier: ^22.13.10
+        version: 22.13.10
       typescript:
         specifier: 'catalog:'
         version: 5.8.2
       unbuild:
         specifier: 'catalog:'
         version: 3.5.0(typescript@5.8.2)
+      wesl:
+        specifier: 0.6.0-rc1
+        version: 0.6.0-rc1
+      wesl-plugin:
+        specifier: 0.6.0-rc1
+        version: 0.6.0-rc1(esbuild@0.25.1)(rollup@4.35.0)(vite@6.2.2(@types/node@22.13.10)(jiti@2.4.2))
 
 packages:
 
@@ -538,6 +554,9 @@ packages:
 
   '@types/estree@1.0.6':
     resolution: {integrity: sha512-AYnb1nQyY49te+VRAVgmzfcgjYS91mY5P0TKUDCLEM+gNnA+3T6rWITXRLYCpahpqSQbN5cE+gHpnPyXjHWxcw==}
+
+  '@types/node@22.13.10':
+    resolution: {integrity: sha512-I6LPUvlRH+O6VRUqYOcMudhaIdUVWfsjnZavnsraHvpBwaEyMN29ry+0UVJhImYL16xsscu0aske3yA+uPOWfw==}
 
   '@types/resolve@1.20.2':
     resolution: {integrity: sha512-60BCwRFOZCQhDncwQdxxeOEEkbc5dIMccYLwbxsS4TUNeVECQ/pBJ0j09mrHOl/JJvpRPGwO9SvE4nR2Nb/a4Q==}
@@ -1094,6 +1113,9 @@ packages:
       typescript:
         optional: true
 
+  undici-types@6.20.0:
+    resolution: {integrity: sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg==}
+
   unplugin@2.2.0:
     resolution: {integrity: sha512-m1ekpSwuOT5hxkJeZGRxO7gXbXT3gF26NjQ7GdVHoLoF8/nopLcd/QfPigpCy7i51oFHiRJg/CyHhj4vs2+KGw==}
     engines: {node: '>=18.12.0'}
@@ -1460,6 +1482,10 @@ snapshots:
   '@trysound/sax@0.2.0': {}
 
   '@types/estree@1.0.6': {}
+
+  '@types/node@22.13.10':
+    dependencies:
+      undici-types: 6.20.0
 
   '@types/resolve@1.20.2': {}
 
@@ -2085,6 +2111,8 @@ snapshots:
       - vue
       - vue-tsc
 
+  undici-types@6.20.0: {}
+
   unplugin@2.2.0:
     dependencies:
       acorn: 8.14.1
@@ -2106,18 +2134,19 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
-  vite@6.2.2(jiti@2.4.2):
+  vite@6.2.2(@types/node@22.13.10)(jiti@2.4.2):
     dependencies:
       esbuild: 0.25.1
       postcss: 8.5.3
       rollup: 4.35.0
     optionalDependencies:
+      '@types/node': 22.13.10
       fsevents: 2.3.3
       jiti: 2.4.2
 
   webpack-virtual-modules@0.6.2: {}
 
-  wesl-plugin@0.6.0-rc1(esbuild@0.25.1)(vite@6.2.2(jiti@2.4.2)):
+  wesl-plugin@0.6.0-rc1(esbuild@0.25.1)(rollup@4.35.0)(vite@6.2.2(@types/node@22.13.10)(jiti@2.4.2)):
     dependencies:
       import-meta-resolve: 4.1.0
       toml: 3.0.0
@@ -2125,7 +2154,8 @@ snapshots:
       wesl: 0.6.0-rc1
     optionalDependencies:
       esbuild: 0.25.1
-      vite: 6.2.2(jiti@2.4.2)
+      rollup: 4.35.0
+      vite: 6.2.2(@types/node@22.13.10)(jiti@2.4.2)
 
   wesl@0.6.0-rc1:
     dependencies:
