@@ -1,0 +1,21 @@
+{
+  "name": "example-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "@webgpu/types": "catalog:",
+    "vite": "^6.2.0",
+    "wesl": "0.6.0-rc1",
+    "wesl-plugin": "0.6.0-rc1"
+  },
+  "dependencies": {
+    "typegpu": "catalog:"
+  }
+}

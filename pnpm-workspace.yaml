@@ -1,0 +1,9 @@
+packages:
+  - "apps/**"
+  - "packages/**"
+
+catalog:
+  typegpu: ^0.4.6
+  "@webgpu/types": ^0.1.54
+  typescript: ^5.8.2
+  unbuild: ^3.5.0
