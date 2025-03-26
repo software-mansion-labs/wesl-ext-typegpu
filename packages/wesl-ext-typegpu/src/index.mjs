@@ -9,6 +9,11 @@ import {
 } from "knitwork";
 import { noSuffix } from "wesl";
 
+/** @typedef {import("wesl").WeslAST['moduleElem']['contents'][number]} AbstractElem */
+/** @typedef {Extract<AbstractElem, { kind: 'struct' }>} StructElem */
+/** @typedef {StructElem['members'][number]} StructMemberElem */
+/** @typedef {StructMemberElem['typeRef']} TypeRefElem */
+
 /** @type {import("wesl-plugin").PluginExtension} */
 export const typegpuExtension = {
   extensionName: "typegpu",
@@ -44,18 +49,7 @@ async function emitReflectJs(baseId, api) {
   for (const elem of registry.modules[`package::${rootName}`].moduleElem
     .contents) {
     if (elem.kind === "struct") {
-      const fieldsCode = genObjectFromRawEntries(
-        elem.members.map((member) => {
-          return /** @type {[string, string]} */ ([
-            member.name.name,
-            // TODO: Resolve custom data-types properly
-            `d.${member.typeRef.name.originalName}`,
-          ]);
-        }),
-      );
-      snippets.push(
-        `export const ${elem.name.ident.originalName} = d.struct(${fieldsCode}).$name(${genString(elem.name.ident.originalName)});`,
-      );
+      snippets.push(generateStruct(elem));
     }
   }
 
@@ -64,4 +58,33 @@ async function emitReflectJs(baseId, api) {
   console.log(src);
 
   return src;
+}
+
+/**
+ * @param {StructElem} struct
+ */
+function generateStruct(struct) {
+  const name = struct.name.ident.originalName;
+  const fieldsCode = genObjectFromRawEntries(
+    struct.members.map((member) => generateMember(member)),
+  );
+  return `export const ${name} = d.struct(${fieldsCode}).$name(${genString(name)});`;
+}
+
+/**
+ * @param {StructMemberElem} member
+ */
+function generateMember(member) {
+  return /** @type {[string, string]} */ ([
+    member.name.name,
+    // TODO: Resolve custom data-types properly
+    generateType(member.typeRef),
+  ]);
+}
+
+/**
+ * @param {TypeRefElem} typeRef
+ */
+function generateType(typeRef) {
+  return `d.${typeRef.name.originalName}`
 }
