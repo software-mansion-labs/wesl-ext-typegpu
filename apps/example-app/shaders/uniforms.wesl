@@ -1,4 +1,4 @@
 struct Uniforms {
-  fromColor: vec3f,
+  @location(0) fromColor: vec3f,
   toColor: vec3f,
 }

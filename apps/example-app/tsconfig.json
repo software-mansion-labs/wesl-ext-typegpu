@@ -18,5 +18,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src", "shaders"]
+  "include": ["src", "shaders", ".wesl/**/*"]
 }
