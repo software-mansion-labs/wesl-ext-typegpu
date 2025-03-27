@@ -1,19 +1,14 @@
 // @ts-check
 
 import path from 'node:path';
-import {
-  genImport,
-  genObjectFromRaw,
-  genObjectFromRawEntries,
-  genString,
-} from 'knitwork';
+import { genImport, genObjectFromRawEntries, genString } from 'knitwork';
 import { attributeToString, noSuffix } from 'wesl';
 
-/** @typedef {import("wesl").WeslAST['moduleElem']['contents'][number]} AbstractElem */
-/** @typedef {Extract<AbstractElem, { kind: 'struct' }>} StructElem */
-/** @typedef {StructElem['members'][number]} StructMemberElem */
-/** @typedef {Extract<StructMemberElem['attributes'], {}>[number]} AttributeElem */
-/** @typedef {StructMemberElem['typeRef']} TypeRefElem */
+/** @typedef {import("wesl").AbstractElem} AbstractElem */
+/** @typedef {import("wesl").StructElem} StructElem */
+/** @typedef {import("wesl").StructMemberElem} StructMemberElem */
+/** @typedef {import("wesl").AttributeElem} AttributeElem */
+/** @typedef {import("wesl").TypeRefElem} TypeRefElem */
 
 /** @type {import("wesl-plugin").PluginExtension} */
 export const typegpuExtension = {
@@ -94,13 +89,13 @@ function generateType(typeRef, attributes) {
     attributes?.reduce((acc, attributeElem) => {
       const attribute = attributeElem.attribute;
 
-      if (attribute.kind === '@attribute') {
-        console.log(attributeToString(attribute));
-        let attributeString = attributeToString(attribute);
-        attributeString = attributeString.replace(' @', '');
-        attributeString = attributeString.replace(')', `, ${acc})`);
-        return `d.${attributeString}`;
-      }
+      // if (attribute.kind === '@attribute') {
+      //   console.log(attributeToString(attribute));
+      //   let attributeString = attributeToString(attribute);
+      //   attributeString = attributeString.replace(' @', '');
+      //   attributeString = attributeString.replace(')', `, ${acc})`);
+      //   return `d.${attributeString}`;
+      // }
       return acc;
     }, tgpuType) ?? tgpuType;
 
