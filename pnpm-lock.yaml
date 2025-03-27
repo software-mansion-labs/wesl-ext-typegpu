@@ -23,6 +23,9 @@ importers:
 
   .:
     devDependencies:
+      '@biomejs/biome':
+        specifier: ^1.9.4
+        version: 1.9.4
       arktype:
         specifier: ^2.1.9
         version: 2.1.9
@@ -49,14 +52,14 @@ importers:
         specifier: ^6.2.0
         version: 6.2.2(@types/node@22.13.10)(jiti@2.4.2)
       wesl:
-        specifier: 0.6.0-rc1
-        version: 0.6.0-rc1
+        specifier: 0.6.0-rc4
+        version: 0.6.0-rc4
       wesl-ext-typegpu:
         specifier: workspace:*
         version: link:../../packages/wesl-ext-typegpu
       wesl-plugin:
-        specifier: 0.6.0-rc1
-        version: 0.6.0-rc1(esbuild@0.25.1)(rollup@4.35.0)(vite@6.2.2(@types/node@22.13.10)(jiti@2.4.2))
+        specifier: 0.6.0-rc4
+        version: 0.6.0-rc4(esbuild@0.25.1)(rollup@4.35.0)(vite@6.2.2(@types/node@22.13.10)(jiti@2.4.2))
 
   packages/wesl-ext-typegpu:
     dependencies:
@@ -74,11 +77,11 @@ importers:
         specifier: 'catalog:'
         version: 3.5.0(typescript@5.8.2)
       wesl:
-        specifier: 0.6.0-rc1
-        version: 0.6.0-rc1
+        specifier: 0.6.0-rc4
+        version: 0.6.0-rc4
       wesl-plugin:
-        specifier: 0.6.0-rc1
-        version: 0.6.0-rc1(esbuild@0.25.1)(rollup@4.35.0)(vite@6.2.2(@types/node@22.13.10)(jiti@2.4.2))
+        specifier: 0.6.0-rc4
+        version: 0.6.0-rc4(esbuild@0.25.1)(rollup@4.35.0)(vite@6.2.2(@types/node@22.13.10)(jiti@2.4.2))
 
 packages:
 
@@ -95,6 +98,59 @@ packages:
   '@babel/helper-validator-identifier@7.25.9':
     resolution: {integrity: sha512-Ed61U6XJc3CVRfkERJWDz4dJwKe7iLmmJsbOGu9wSloNSFttHV0I8g6UAgb7qnK5ly5bGLPd4oXZlxCdANBOWQ==}
     engines: {node: '>=6.9.0'}
+
+  '@biomejs/biome@1.9.4':
+    resolution: {integrity: sha512-1rkd7G70+o9KkTn5KLmDYXihGoTaIGO9PIIN2ZB7UJxFrWw04CZHPYiMRjYsaDvVV7hP1dYNRLxSANLaBFGpog==}
+    engines: {node: '>=14.21.3'}
+    hasBin: true
+
+  '@biomejs/cli-darwin-arm64@1.9.4':
+    resolution: {integrity: sha512-bFBsPWrNvkdKrNCYeAp+xo2HecOGPAy9WyNyB/jKnnedgzl4W4Hb9ZMzYNbf8dMCGmUdSavlYHiR01QaYR58cw==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@biomejs/cli-darwin-x64@1.9.4':
+    resolution: {integrity: sha512-ngYBh/+bEedqkSevPVhLP4QfVPCpb+4BBe2p7Xs32dBgs7rh9nY2AIYUL6BgLw1JVXV8GlpKmb/hNiuIxfPfZg==}
+    engines: {node: '>=14.21.3'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@biomejs/cli-linux-arm64-musl@1.9.4':
+    resolution: {integrity: sha512-v665Ct9WCRjGa8+kTr0CzApU0+XXtRgwmzIf1SeKSGAv+2scAlW6JR5PMFo6FzqqZ64Po79cKODKf3/AAmECqA==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@biomejs/cli-linux-arm64@1.9.4':
+    resolution: {integrity: sha512-fJIW0+LYujdjUgJJuwesP4EjIBl/N/TcOX3IvIHJQNsAqvV2CHIogsmA94BPG6jZATS4Hi+xv4SkBBQSt1N4/g==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@biomejs/cli-linux-x64-musl@1.9.4':
+    resolution: {integrity: sha512-gEhi/jSBhZ2m6wjV530Yy8+fNqG8PAinM3oV7CyO+6c3CEh16Eizm21uHVsyVBEB6RIM8JHIl6AGYCv6Q6Q9Tg==}
+    engines: {node: '>=14.21.3'}
+    cpu: [x64]
+    os: [linux]
+
+  '@biomejs/cli-linux-x64@1.9.4':
+    resolution: {integrity: sha512-lRCJv/Vi3Vlwmbd6K+oQ0KhLHMAysN8lXoCI7XeHlxaajk06u7G+UsFSO01NAs5iYuWKmVZjmiOzJ0OJmGsMwg==}
+    engines: {node: '>=14.21.3'}
+    cpu: [x64]
+    os: [linux]
+
+  '@biomejs/cli-win32-arm64@1.9.4':
+    resolution: {integrity: sha512-tlbhLk+WXZmgwoIKwHIHEBZUwxml7bRJgk0X2sPyNR3S93cdRq6XulAZRQJ17FYGGzWne0fgrXBKpl7l4M87Hg==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@biomejs/cli-win32-x64@1.9.4':
+    resolution: {integrity: sha512-8Y5wMhVIPaWe6jw2H+KlEm4wP/f7EW3810ZLmDlrEEy5KvBsb9ECEfu/kMWD484ijfQ8+nIi0giMgu9g1UAuuA==}
+    engines: {node: '>=14.21.3'}
+    cpu: [x64]
+    os: [win32]
 
   '@esbuild/aix-ppc64@0.24.2':
     resolution: {integrity: sha512-thpVCb/rhxE/BnMLQ7GReQLLN8q9qbHmI55F4489/ByVg2aQaQ6kbcLb6FHkocZzQhxc4gx0sCk0tJkKBFzDhA==}
@@ -786,8 +842,8 @@ packages:
   mdn-data@2.0.30:
     resolution: {integrity: sha512-GaqWWShW4kv/G9IEucWScBx9G1/vsFZZJUO+tD26M8J8z3Kw5RDQjaoZe03YAClgeS/SWPOcb4nkFBTEi5DUEA==}
 
-  mini-parse@0.6.0-rc1:
-    resolution: {integrity: sha512-rSmxVlUt7EQxdIn0mg8hB2SkcJwXorXPlyhx6y71icWnST1VqGI1hVR4y82DTToIQWV6vtB5Ip+gmAXdrT7Urg==}
+  mini-parse@0.6.0-rc4:
+    resolution: {integrity: sha512-p8+G8d+4Z+4ud0/Nyl3IO5T6tMTJ+UKULSyponsiy6VxbF0o4Maag8e8AaJj4VMix5/8ZBhxZ/AZlt9YcGBJXg==}
 
   mkdist@2.2.0:
     resolution: {integrity: sha512-GfKwu4A2grXfhj2TZm4ydfzP515NaALqKaPq4WqaZ6NhEnD47BiIQPySoCTTvVqHxYcuqVkNdCXjYf9Bz1Y04Q==}
@@ -1176,8 +1232,8 @@ packages:
   webpack-virtual-modules@0.6.2:
     resolution: {integrity: sha512-66/V2i5hQanC51vBQKPH4aI8NMAcBW59FVBs+rC7eGHupMyfn34q7rZIE+ETlJ+XTevqfUhVVBgSUNSW2flEUQ==}
 
-  wesl-plugin@0.6.0-rc1:
-    resolution: {integrity: sha512-ccl5EyIMhb8WVqtKTWuAygJYt6MGvQ/pCkgHY+dd6+9pkvNanWj8XxwiZB5775o5Smk3LJALW5TYfwoQqk3sDg==}
+  wesl-plugin@0.6.0-rc4:
+    resolution: {integrity: sha512-hKu2ZRp6hyHE1zgschg6PVBm+rYh5vJOHhnrFbyeyD7X2KtZaAnJVWVZOTAfUZY8yyE3V2t7s9IrHlINzhGZFw==}
     peerDependencies:
       '@farmfe/core': '>=1'
       '@nuxt/kit': ^3
@@ -1202,8 +1258,8 @@ packages:
       webpack:
         optional: true
 
-  wesl@0.6.0-rc1:
-    resolution: {integrity: sha512-jP/VGaBxaqz+zKrgUkCgRmtO9GcT+JDFn7NgLtVg0xF7nxfX52RybMuSNuwyPB1qJwCMH/yjmeHK71v98GXwbg==}
+  wesl@0.6.0-rc4:
+    resolution: {integrity: sha512-2NUxMfHdWilOSQWCcQBZnxt4csc5HGDNoefD/1RLpLTyXcwM+10Z4gki9+DvKX1T546eG7pQ8Ak6NV/5zSvGGQ==}
 
 snapshots:
 
@@ -1221,6 +1277,41 @@ snapshots:
     optional: true
 
   '@babel/helper-validator-identifier@7.25.9':
+    optional: true
+
+  '@biomejs/biome@1.9.4':
+    optionalDependencies:
+      '@biomejs/cli-darwin-arm64': 1.9.4
+      '@biomejs/cli-darwin-x64': 1.9.4
+      '@biomejs/cli-linux-arm64': 1.9.4
+      '@biomejs/cli-linux-arm64-musl': 1.9.4
+      '@biomejs/cli-linux-x64': 1.9.4
+      '@biomejs/cli-linux-x64-musl': 1.9.4
+      '@biomejs/cli-win32-arm64': 1.9.4
+      '@biomejs/cli-win32-x64': 1.9.4
+
+  '@biomejs/cli-darwin-arm64@1.9.4':
+    optional: true
+
+  '@biomejs/cli-darwin-x64@1.9.4':
+    optional: true
+
+  '@biomejs/cli-linux-arm64-musl@1.9.4':
+    optional: true
+
+  '@biomejs/cli-linux-arm64@1.9.4':
+    optional: true
+
+  '@biomejs/cli-linux-x64-musl@1.9.4':
+    optional: true
+
+  '@biomejs/cli-linux-x64@1.9.4':
+    optional: true
+
+  '@biomejs/cli-win32-arm64@1.9.4':
+    optional: true
+
+  '@biomejs/cli-win32-x64@1.9.4':
     optional: true
 
   '@esbuild/aix-ppc64@0.24.2':
@@ -1762,7 +1853,7 @@ snapshots:
 
   mdn-data@2.0.30: {}
 
-  mini-parse@0.6.0-rc1: {}
+  mini-parse@0.6.0-rc4: {}
 
   mkdist@2.2.0(typescript@5.8.2):
     dependencies:
@@ -2146,17 +2237,17 @@ snapshots:
 
   webpack-virtual-modules@0.6.2: {}
 
-  wesl-plugin@0.6.0-rc1(esbuild@0.25.1)(rollup@4.35.0)(vite@6.2.2(@types/node@22.13.10)(jiti@2.4.2)):
+  wesl-plugin@0.6.0-rc4(esbuild@0.25.1)(rollup@4.35.0)(vite@6.2.2(@types/node@22.13.10)(jiti@2.4.2)):
     dependencies:
       import-meta-resolve: 4.1.0
       toml: 3.0.0
       unplugin: 2.2.0
-      wesl: 0.6.0-rc1
+      wesl: 0.6.0-rc4
     optionalDependencies:
       esbuild: 0.25.1
       rollup: 4.35.0
       vite: 6.2.2(@types/node@22.13.10)(jiti@2.4.2)
 
-  wesl@0.6.0-rc1:
+  wesl@0.6.0-rc4:
     dependencies:
-      mini-parse: 0.6.0-rc1
+      mini-parse: 0.6.0-rc4

@@ -49,6 +49,7 @@ const renderPipeline = device.createRenderPipeline({
   layout: device.createPipelineLayout({ bindGroupLayouts: [] }),
 });
 
+
 function render() {
   const textureView = context.getCurrentTexture().createView();
   const renderPassDescriptor: GPURenderPassDescriptor = {

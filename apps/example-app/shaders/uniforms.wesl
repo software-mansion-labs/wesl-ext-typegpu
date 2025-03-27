@@ -1,7 +1,15 @@
+struct Nested {
+  a: vec3f,
+}
+
 struct Uniforms {
-  attributeUndefined: vec3f,
+  standardType: vec3f,
   arrayType: array<vec4f, 3>,
-  @location(0) attributeLocation: vec3f,
-  @interpolate(flat) attributeInterpolate: vec3f,
-  @location(0) @interpolate(flat) attributeLocationInterpolate: vec3f,
+  atomicType: atomic<u32>,
+  nestedType: Nested,
+//  @align(16) aligned: Nested,
+//  @size(16) sized: Nested,
+  @location(0) locationType: vec3f,
+  @interpolate(flat) interpolateType: vec3f,
+  @location(0) @interpolate(flat) locationInterpolateType: vec3f,
 }

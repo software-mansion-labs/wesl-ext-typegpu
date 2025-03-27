@@ -13,8 +13,8 @@
     "typescript": "catalog:",
     "@webgpu/types": "catalog:",
     "vite": "^6.2.0",
-    "wesl": "0.6.0-rc1",
-    "wesl-plugin": "0.6.0-rc1",
+    "wesl": "0.6.0-rc4",
+    "wesl-plugin": "0.6.0-rc4",
     "wesl-ext-typegpu": "workspace:*"
   },
   "dependencies": {

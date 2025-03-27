@@ -1,22 +1,23 @@
 // @ts-check
 
-import path from "node:path";
+import path from 'node:path';
 import {
   genImport,
   genObjectFromRaw,
   genObjectFromRawEntries,
   genString,
-} from "knitwork";
-import { noSuffix } from "wesl";
+} from 'knitwork';
+import { attributeToString, noSuffix } from 'wesl';
 
 /** @typedef {import("wesl").WeslAST['moduleElem']['contents'][number]} AbstractElem */
 /** @typedef {Extract<AbstractElem, { kind: 'struct' }>} StructElem */
 /** @typedef {StructElem['members'][number]} StructMemberElem */
+/** @typedef {Extract<StructMemberElem['attributes'], {}>[number]} AttributeElem */
 /** @typedef {StructMemberElem['typeRef']} TypeRefElem */
 
 /** @type {import("wesl-plugin").PluginExtension} */
 export const typegpuExtension = {
-  extensionName: "typegpu",
+  extensionName: 'typegpu',
   emitFn: emitReflectJs,
 };
 
@@ -35,25 +36,25 @@ async function emitReflectJs(baseId, api) {
   const registry = await api.weslRegistry();
 
   const tomlRelative = path.relative(tomlDir, resolvedWeslRoot);
-  const debugWeslRoot = tomlRelative.replaceAll(path.sep, "/");
+  const debugWeslRoot = tomlRelative.replaceAll(path.sep, '/');
 
   const bundleImports = dependencies
     .map((p) => genImport(`${p}?typegpu`, p))
-    .join("\n");
+    .join('\n');
 
   /** @type {string[]} */
-  const snippets = [genImport("typegpu/data", "* as d")];
+  const snippets = [genImport('typegpu/data', '* as d')];
 
   const rootName = path.basename(rootModuleName);
 
   for (const elem of registry.modules[`package::${rootName}`].moduleElem
     .contents) {
-    if (elem.kind === "struct") {
+    if (elem.kind === 'struct') {
       snippets.push(generateStruct(elem));
     }
   }
 
-  const src = `${bundleImports}\n${snippets.join("\n")}`;
+  const src = `${bundleImports}\n${snippets.join('\n')}`;
 
   console.log(src);
 
@@ -78,13 +79,30 @@ function generateMember(member) {
   return /** @type {[string, string]} */ ([
     member.name.name,
     // TODO: Resolve custom data-types properly
-    generateType(member.typeRef),
+    generateType(member.typeRef, member.attributes),
   ]);
 }
 
 /**
  * @param {TypeRefElem} typeRef
+ * @param {AttributeElem[] | undefined} attributes
  */
-function generateType(typeRef) {
-  return `d.${typeRef.name.originalName}`
+function generateType(typeRef, attributes) {
+  const tgpuType = `d.${typeRef.name.originalName}`;
+
+  const result =
+    attributes?.reduce((acc, attributeElem) => {
+      const attribute = attributeElem.attribute;
+
+      if (attribute.kind === '@attribute') {
+        console.log(attributeToString(attribute));
+        let attributeString = attributeToString(attribute);
+        attributeString = attributeString.replace(' @', '');
+        attributeString = attributeString.replace(')', `, ${acc})`);
+        return `d.${attributeString}`;
+      }
+      return acc;
+    }, tgpuType) ?? tgpuType;
+
+  return result;
 }
