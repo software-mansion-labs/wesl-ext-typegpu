@@ -1,4 +1,5 @@
 // @ts-check
+// AAA structy też mogą mieć atrybuty
 
 import path from 'node:path';
 import { genImport, genObjectFromRawEntries, genString } from 'knitwork';
@@ -47,16 +48,10 @@ async function emitReflectJs(baseId, api) {
   const abstractElements =
     registry.modules[`package::${rootName}`].moduleElem.contents;
 
-  console.log('STRUCTS:');
-  console.log(findAllDefinedStructs(abstractElements));
-  console.log('IMPORTS:');
-  console.log(findAllImports(abstractElements));
-  console.log('TYPES:');
+  const sortedStructs = sortStructs(abstractElements);
 
-  for (const elem of abstractElements) {
-    if (elem.kind === 'struct') {
-      snippets.push(generateStruct(elem));
-    }
+  for (const elem of sortedStructs) {
+    snippets.push(generateStruct(elem));
   }
 
   const src = `${bundleImports}\n${snippets.join('\n')}`;
@@ -67,16 +62,85 @@ async function emitReflectJs(baseId, api) {
 }
 
 /**
- * @param {AbstractElem[]} elements
+ * @param {AbstractElem[]} abstractElements
  */
-function findAllDefinedStructs(elements) {
-  const structs = new Set();
-  for (const elem of elements) {
-    if (elem.kind === 'struct') {
-      structs.add(elem.name.ident.originalName);
+function sortStructs(abstractElements) {
+  /** @type {Map<string, StructElem>} */
+  const definedStructElements = new Map(
+    abstractElements
+      .filter((elem) => elem.kind === 'struct')
+      .map((struct) => [struct.name.ident.originalName, struct]),
+  );
+
+  const definedStructIdentifiers = new Set(definedStructElements.keys());
+
+  /** @type {Map<string, number>} */
+  const dependenciesLeft = new Map(
+    definedStructIdentifiers.values().map((identifier) => [identifier, 0]),
+  );
+  /** @type {Map<string, Set<string>>} */
+  const dependencyOf = new Map(
+    definedStructIdentifiers
+      .values()
+      .map((identifier) => [identifier, new Set()]),
+  );
+
+  for (const [identifier, struct] of definedStructElements) {
+    const dependencies = findNeighborStructs(struct, definedStructIdentifiers);
+    dependenciesLeft.set(identifier, dependencies.size);
+
+    for (const neighbor of dependencies) {
+      dependencyOf.get(neighbor)?.add(identifier);
     }
   }
-  return structs;
+
+  /** @type {string[]} */
+  const queue = dependenciesLeft
+    .entries()
+    .filter(([_, dependencies]) => dependencies === 0)
+    .map(([key, _]) => key)
+    .toArray();
+  const visited = new Set();
+  /** @type {StructElem[]} */
+  const orderedStructs = [];
+
+  while (queue.length > 0) {
+    // TODO: optimize this shift
+    const current = /** @type {string} */ (queue.shift());
+    if (visited.has(current)) {
+      continue;
+    }
+    visited.add(current);
+    orderedStructs.push(
+      /** @type {StructElem} */ (definedStructElements.get(current)),
+    );
+
+    for (const neighbor of dependencyOf.get(current) ?? []) {
+      const count = /** @type {number} */ (dependenciesLeft.get(neighbor));
+      dependenciesLeft.set(neighbor, count - 1);
+      if (count === 1) {
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  if (visited.size !== definedStructIdentifiers.size) {
+    throw new Error('Cyclic dependency in struct member types detected!');
+  }
+
+  return orderedStructs;
+}
+
+/**
+ * @param {StructElem} struct
+ * @param {Set<string>} relevantIdentifiers
+ */
+function findNeighborStructs(struct, relevantIdentifiers) {
+  const neighbors = new Set();
+  for (const member of struct.members) {
+    findTypeReferences(member.typeRef, neighbors);
+  }
+  return neighbors.intersection(relevantIdentifiers);
 }
 
 /**
@@ -103,6 +167,19 @@ function traverseImport(importElem, importsSet) {
   } else {
     for (const subImport of segment.subtrees) {
       traverseImport(subImport, importsSet);
+    }
+  }
+}
+
+/**
+ * @param {TypeRefElem} type
+ * @param {Set<string>} referencesSet
+ */
+function findTypeReferences(type, referencesSet) {
+  referencesSet.add(type.name.originalName);
+  for (const elem of type.templateParams ?? []) {
+    if ('kind' in elem && elem.kind === 'type') {
+      findTypeReferences(elem, referencesSet);
     }
   }
 }
@@ -153,17 +230,4 @@ function generateType(typeRef, attributes) {
     }, tgpuType) ?? tgpuType;
 
   return result;
-}
-
-/**
- * @param {TypeRefElem} type
- * @param {Set<string>} referencesSet
- */
-function findTypeReferences(type, referencesSet) {
-  referencesSet.add(type.name.originalName);
-  for (const elem of type.templateParams ?? []) {
-    if ('kind' in elem && elem.kind === 'type') {
-      findTypeReferences(elem, referencesSet);
-    }
-  }
 }
