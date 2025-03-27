@@ -105,32 +105,38 @@ function findTypeReferences(type, referencesSet) {
 
 /**
  * @param {StructElem} struct
+ * @param {Set<string>} nonTgpuIdentifiers
  */
-export function generateStruct(struct) {
+export function generateStruct(struct, nonTgpuIdentifiers) {
   const name = struct.name.ident.originalName;
   const fieldsCode = genObjectFromRawEntries(
-    struct.members.map((member) => generateMember(member)),
+    struct.members.map((member) => generateMember(member, nonTgpuIdentifiers)),
   );
   return `export const ${name} = d.struct(${fieldsCode}).$name(${genString(name)});`;
 }
 
 /**
  * @param {StructMemberElem} member
+ * @param {Set<string>} nonTgpuIdentifiers
  */
-function generateMember(member) {
+function generateMember(member, nonTgpuIdentifiers) {
   return /** @type {[string, string]} */ ([
     member.name.name,
     // TODO: Resolve custom data-types properly
-    generateType(member.typeRef, member.attributes),
+    generateType(member.typeRef, member.attributes, nonTgpuIdentifiers),
   ]);
 }
 
 /**
  * @param {TypeRefElem} typeRef
  * @param {AttributeElem[] | undefined} attributes
+ * @param {Set<string>} nonTgpuIdentifiers
  */
-function generateType(typeRef, attributes) {
-  const tgpuType = `d.${typeRef.name.originalName}`;
+function generateType(typeRef, attributes, nonTgpuIdentifiers) {
+  const typeName = typeRef.name.originalName;
+  const tgpuType = nonTgpuIdentifiers.has(typeName)
+    ? typeName
+    : `d.${typeName}`;
 
   const result =
     attributes?.reduce((acc, attributeElem) => {

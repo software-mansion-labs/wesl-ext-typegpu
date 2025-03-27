@@ -52,9 +52,12 @@ async function emitReflectJs(baseId, api) {
   const sortedStructs = sortStructs(
     abstractElements.filter((element) => element.kind === 'struct'),
   );
+  const nonTgpuIdentifiers = new Set(
+    sortedStructs.map((struct) => struct.name.ident.originalName),
+  ).union(findAllImports(abstractElements));
 
   for (const elem of sortedStructs) {
-    snippets.push(generateStruct(elem));
+    snippets.push(generateStruct(elem, nonTgpuIdentifiers));
   }
 
   const src = `${bundleImports}\n${snippets.join('\n')}`;
@@ -68,6 +71,7 @@ async function emitReflectJs(baseId, api) {
  * @param {AbstractElem[]} elements
  */
 function findAllImports(elements) {
+  /** @type {Set<string>} */
   const imports = new Set();
   for (const elem of elements) {
     if (elem.kind === 'import') {
