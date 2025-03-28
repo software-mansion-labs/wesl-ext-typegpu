@@ -21,7 +21,7 @@ struct DefinedAbove {
   definedBelowType: DefinedBelow,
   definedBelowInArrayType: array<array<DefinedBelowInArray, 4>, 2>,
 
-  @align(16) alignedAttribute: DefinedAbove,
+  @align(1+1) alignedAttribute: DefinedAbove,
   @size(16) sizedAttribute: DefinedAbove,
   @location(0) locationAttribute: vec3f,
   @interpolate(flat) interpolateAttribute: vec3f,
@@ -42,4 +42,6 @@ struct DefinedBelowInArray {
   c: vec3f,
 }
 
-
+struct RuntimeSized {
+  d: array<f32>,
+}

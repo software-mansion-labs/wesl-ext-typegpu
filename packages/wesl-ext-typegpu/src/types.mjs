@@ -9,6 +9,8 @@
 /** @typedef {import("wesl").ImportStatement} ImportStatement */
 /** @typedef {import("wesl").UnknownExpressionElem} UnknownExpressionElem */
 
+export const VariableSizedArrayParam = '__arrayLength';
+
 /** @type {Record<string, string>} */
 const vecResolveMap = {
   bool: 'b',
@@ -89,17 +91,15 @@ function parseArrayType(typeRef, nonTgpuIdentifiers) {
   ) {
     throw new Error('Unsupported array parameters!');
   }
-  if (
-    !(
-      typeRef.templateParams[1] &&
-      typeRef.templateParams[1].kind === 'expression'
-    )
-  ) {
-    throw new Error('Runtime-sized arrays in structs are not supported!');
-  }
   const subType = generateType(typeRef.templateParams[0], nonTgpuIdentifiers);
-  const length = tryExtractText(typeRef.templateParams[1]);
-  return `d.arrayOf(${subType}, ${length})`;
+  if (
+    typeRef.templateParams[1] &&
+    typeRef.templateParams[1].kind === 'expression'
+  ) {
+    const length = tryExtractText(typeRef.templateParams[1]);
+    return `d.arrayOf(${subType}, ${length})`;
+  }
+  return `d.arrayOf(${subType}, ${VariableSizedArrayParam})`;
 }
 
 /**

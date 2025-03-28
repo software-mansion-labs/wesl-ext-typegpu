@@ -3,7 +3,11 @@
 // AAA var length member
 
 import { genObjectFromRawEntries, genString } from 'knitwork';
-import { generateType, wrapInAttributes } from './types.mjs';
+import {
+  generateType,
+  VariableSizedArrayParam,
+  wrapInAttributes,
+} from './types.mjs';
 
 /** @typedef {import("wesl").AbstractElem} AbstractElem */
 /** @typedef {import("wesl").StructElem} StructElem */
@@ -116,10 +120,13 @@ export function generateStruct(struct, nonTgpuIdentifiers) {
   const fieldsCode = genObjectFromRawEntries(
     struct.members.map((member) => generateMember(member, nonTgpuIdentifiers)),
   );
-  const structDefinition = wrapInAttributes(
+  let structDefinition = wrapInAttributes(
     `d.struct(${fieldsCode}).$name(${genString(name)})`,
     struct.attributes,
   );
+  if (isVariableLength(struct)) {
+    structDefinition = `((${VariableSizedArrayParam}: number) => ${structDefinition})`;
+  }
   return `export const ${name} = ${structDefinition};`;
 }
 
@@ -137,4 +144,16 @@ function generateMember(member, nonTgpuIdentifiers) {
       member.attributes,
     ),
   ]);
+}
+
+/**
+ * @param {StructElem} struct
+ */
+function isVariableLength(struct) {
+  const lastMember = struct.members[struct.members.length - 1];
+  return (
+    lastMember.typeRef.name.originalName === 'array' &&
+    lastMember.typeRef.templateParams &&
+    lastMember.typeRef.templateParams.length === 1
+  );
 }
