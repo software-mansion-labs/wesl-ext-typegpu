@@ -1,6 +1,13 @@
 // For a full list of overridable settings, and general information on folder-specific settings,
 // see the documentation: https://zed.dev/docs/configuring-zed#settings-files
 {
+  "editor.formatOnSave": true,
+  "[typescript]": {
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+    },
+    "editor.defaultFormatter": "biomejs.biome"
+  },
   "languages": {
     "TypeScript": {
       "language_servers": ["typescript-language-server", "!vtsls", "..."]

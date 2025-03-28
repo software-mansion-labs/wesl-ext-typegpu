@@ -1,14 +1,14 @@
 /// <reference types="wesl-plugin/suffixes" />
 
-import tgpu from "typegpu";
-import { link } from "wesl";
-import linkConfig from "../shaders/main.wesl?link";
-import { Uniforms } from "../shaders/uniforms.wesl?typegpu";
-import "./style.css";
+import tgpu from 'typegpu';
+import { link } from 'wesl';
+import linkConfig from '../shaders/main.wesl?link';
+import { TestStruct } from '../shaders/testStructs.wesl?typegpu';
+import './style.css';
 
-console.log(String(Uniforms));
+console.log(String(TestStruct));
 
-document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
+document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
     <h1>WESL + TypeGPU</h1>
     <canvas id="canvas" width="600" height="600"></canvas>
@@ -20,19 +20,19 @@ const device = root.device;
 
 const vertShader = await link({
   ...linkConfig,
-  rootModuleName: "main.wesl",
+  rootModuleName: 'main.wesl',
 });
 
 const module = vertShader.createShaderModule(root.device, {});
 
-const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
+const canvas = document.querySelector<HTMLCanvasElement>('#canvas')!;
 const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-const context = canvas.getContext("webgpu") as GPUCanvasContext;
+const context = canvas.getContext('webgpu') as GPUCanvasContext;
 
 context.configure({
   device: root.device,
   format: presentationFormat,
-  alphaMode: "premultiplied",
+  alphaMode: 'premultiplied',
 });
 
 const renderPipeline = device.createRenderPipeline({
@@ -44,7 +44,7 @@ const renderPipeline = device.createRenderPipeline({
     targets: [{ format: presentationFormat }],
   },
   primitive: {
-    topology: "triangle-list",
+    topology: 'triangle-list',
   },
   layout: device.createPipelineLayout({ bindGroupLayouts: [] }),
 });
@@ -56,8 +56,8 @@ function render() {
       {
         view: textureView,
         clearValue: [0, 0, 0, 1],
-        loadOp: "clear",
-        storeOp: "store",
+        loadOp: 'clear',
+        storeOp: 'store',
       },
     ],
   };

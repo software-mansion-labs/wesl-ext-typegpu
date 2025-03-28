@@ -43,11 +43,11 @@
     "@types/node": "^22.13.10",
     "typescript": "catalog:",
     "unbuild": "catalog:",
-    "wesl": "0.6.0-rc1",
-    "wesl-plugin": "0.6.0-rc1"
+    "wesl": "0.6.0-rc4",
+    "wesl-plugin": "0.6.0-rc4"
   },
   "peerDependencies": {
-    "wesl": "0.6.0-rc1"
+    "wesl": "0.6.0-rc4"
   },
   "dependencies": {
     "knitwork": "^1.2.0"
