@@ -114,7 +114,11 @@ export function generateStruct(struct, nonTgpuIdentifiers) {
   const fieldsCode = genObjectFromRawEntries(
     struct.members.map((member) => generateMember(member, nonTgpuIdentifiers)),
   );
-  return `export const ${name} = d.struct(${fieldsCode}).$name(${genString(name)});`;
+  const structDefinition = wrapInAttributes(
+    `d.struct(${fieldsCode}).$name(${genString(name)})`,
+    struct.attributes,
+  );
+  return `export const ${name} = ${structDefinition};`;
 }
 
 /**

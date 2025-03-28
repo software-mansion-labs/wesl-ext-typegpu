@@ -6,7 +6,7 @@ struct DefinedAbove {
   a: vec3f,
 }
 
-struct TestStruct {
+@location(0) struct TestStruct {
   standardType: vec3f,
   standardUnwrappedType: vec3<f32>,
   booleanVectorType: vec3<bool>,
@@ -40,7 +40,5 @@ struct DefinedBelow {
 struct DefinedBelowInArray {
   c: vec3f,
 }
-
-
 
 
