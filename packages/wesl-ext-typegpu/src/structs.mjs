@@ -1,6 +1,7 @@
 // @ts-check
 
 import { genObjectFromRawEntries, genString } from 'knitwork';
+import { generateType } from './types.mjs';
 
 /** @typedef {import("wesl").AbstractElem} AbstractElem */
 /** @typedef {import("wesl").StructElem} StructElem */
@@ -121,110 +122,10 @@ export function generateStruct(struct, nonTgpuIdentifiers) {
  * @param {Set<string>} nonTgpuIdentifiers
  */
 function generateMember(member, nonTgpuIdentifiers) {
+  // AAA apply member.attributes here
   return /** @type {[string, string]} */ ([
     member.name.name,
     // TODO: Resolve custom data-types properly
-    generateType(member.typeRef, member.attributes, nonTgpuIdentifiers),
+    generateType(member.typeRef, nonTgpuIdentifiers),
   ]);
-}
-
-/**
- * @param {TypeRefElem} typeRef
- * @param {AttributeElem[] | undefined} attributes
- * @param {Set<string>} nonTgpuIdentifiers
- * @returns {string}
- */
-function generateType(typeRef, attributes, nonTgpuIdentifiers) {
-  const typeName = typeRef.name.originalName;
-  const tgpuType =
-    !nonTgpuIdentifiers.has(typeName) && !typeName.includes('::');
-
-  if (!tgpuType) {
-    return typeName;
-  }
-
-  if (['vec2', 'vec3', 'vec4'].includes(typeName)) {
-    if (
-      !(
-        typeRef.templateParams &&
-        typeRef.templateParams.length === 1 &&
-        typeRef.templateParams[0].kind === 'type' &&
-        typeRef.templateParams[0].name.originalName in vecResolveMap
-      )
-    ) {
-      throw new Error('Unsupported vector parameters!');
-    }
-    return `d.${typeName}${vecResolveMap[typeRef.templateParams[0].name.originalName]}`;
-  }
-
-  if (typeName === 'array') {
-    if (
-      !(
-        typeRef.templateParams &&
-        [1, 2].includes(typeRef.templateParams.length) &&
-        typeRef.templateParams[0].kind === 'type'
-      )
-    ) {
-      throw new Error('Unsupported array parameters!');
-    }
-    if (
-      !(
-        typeRef.templateParams[1] &&
-        typeRef.templateParams[1].kind === 'expression'
-      )
-    ) {
-      throw new Error('Runtime-sized arrays in structs are not supported!');
-    }
-    const subType = generateType(
-      typeRef.templateParams[0],
-      attributes,
-      nonTgpuIdentifiers,
-    );
-    const length = tryExtractText(typeRef.templateParams[1]);
-    return `d.arrayOf(${subType}, ${length})`;
-  }
-
-  if (typeName === 'atomic') {
-    if (
-      !(
-        typeRef.templateParams &&
-        typeRef.templateParams.length === 1 &&
-        typeRef.templateParams[0].kind === 'type'
-      )
-    ) {
-      throw new Error('Unsupported atomic parameters!');
-    }
-    const subType = generateType(
-      typeRef.templateParams[0],
-      attributes,
-      nonTgpuIdentifiers,
-    );
-    return `d.atomic(${subType})`;
-  }
-
-  return `d.${typeName}`;
-}
-
-/** @type {Record<string, string>} */
-const vecResolveMap = {
-  bool: 'b',
-  AbstractInt: 'i',
-  AbstractFloat: 'f',
-  i32: 'i',
-  u32: 'u',
-  f32: 'f',
-  f16: 'h',
-};
-
-/**
- * @param {UnknownExpressionElem} element
- */
-function tryExtractText(element) {
-  if (!(element.contents.length > 0 && element.contents[0].kind === 'text')) {
-    throw new Error('Unknown expression unparsable to TGSL!');
-  }
-  return element.contents[0].srcModule.src.substring(
-    element.start,
-    element.end,
-  );
 }
