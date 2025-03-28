@@ -14,22 +14,23 @@ struct TestStruct {
   arrayWithLengthType: array<vec4f, 3>,
 //  arrayWithoutLengthType: array<vec2<u32>>,
   atomicType: atomic<u32>,
-  uniformPointerType: ptr<uniform, array<f32, 4>, read_only>,
-  storagePointerType: ptr<storage, array<f32, 4>, read_only>,
+  uniformPointerType: ptr<uniform, array<f32, 4>, read_write>,
+  storagePointerType: ptr<storage, array<f32, 4>, read_write>,
 
   definedAboveType: DefinedAbove,
   definedBelowType: DefinedBelow,
   definedBelowInArrayType: array<array<DefinedBelowInArray, 4>, 2>,
 
-  importedType: Imported,
-  importedTreeType: ImportedFromTree1,
-  importedModuleType: importStructModule::ImportedFromModule,
-
   @align(16) alignedAttribute: DefinedAbove,
-//  @size(16) sizedAttribute: DefinedAbove,
+  @size(16) sizedAttribute: DefinedAbove,
   @location(0) locationAttribute: vec3f,
   @interpolate(flat) interpolateAttribute: vec3f,
-  @location(0) @interpolate(flat) locationInterpolateAttribute: vec3f,
+  @location(1) @interpolate(flat) locationInterpolateAttribute: vec3f,
+  @builtin(position) builtinType: vec4f,
+
+//  importedType: Imported,
+//  importedTreeType: ImportedFromTree1,
+//  importedModuleType: importStructModule::ImportedFromModule,
 }
 
 struct DefinedBelow {

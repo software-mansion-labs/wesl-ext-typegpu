@@ -153,6 +153,44 @@ function parsePtrType(typeRef, nonTgpuIdentifiers) {
 }
 
 /**
+ * @param {string} type
+ * @param {AttributeElem[] | undefined} attributes
+ */
+export function wrapInAttributes(type, attributes) {
+  if (!attributes) {
+    return type;
+  }
+  return attributes.reduce((acc, attribute) => {
+    switch (attribute.attribute.kind) {
+      case '@attribute': {
+        const args = attribute.attribute.params
+          ?.map((param) => tryExtractText(param))
+          .join(', ');
+        return `d.${attribute.attribute.name}(${args ? `${args}, ` : ''}${acc})`;
+      }
+      case '@interpolate': {
+        if (
+          !(
+            attribute.attribute.params &&
+            attribute.attribute.params.length === 1
+          )
+        ) {
+          throw new Error('Only interpolation type is supported!');
+        }
+        return `d.interpolate("${attribute.attribute.params[0].name}", ${acc})`;
+      }
+      case '@builtin': {
+        return `d.builtin.${attribute.attribute.param.name}`;
+      }
+      case '@diagnostic':
+        throw new Error('Diagnostic attributes are not supported by TGSL!');
+      case '@if':
+        throw new Error('If attributes are not supported by TGSL!');
+    }
+  }, type);
+}
+
+/**
  * @param {UnknownExpressionElem} element
  */
 function tryExtractText(element) {

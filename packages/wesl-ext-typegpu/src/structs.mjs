@@ -1,7 +1,7 @@
 // @ts-check
 
 import { genObjectFromRawEntries, genString } from 'knitwork';
-import { generateType } from './types.mjs';
+import { generateType, wrapInAttributes } from './types.mjs';
 
 /** @typedef {import("wesl").AbstractElem} AbstractElem */
 /** @typedef {import("wesl").StructElem} StructElem */
@@ -122,10 +122,13 @@ export function generateStruct(struct, nonTgpuIdentifiers) {
  * @param {Set<string>} nonTgpuIdentifiers
  */
 function generateMember(member, nonTgpuIdentifiers) {
-  // AAA apply member.attributes here
+  member.attributes;
   return /** @type {[string, string]} */ ([
     member.name.name,
     // TODO: Resolve custom data-types properly
-    generateType(member.typeRef, nonTgpuIdentifiers),
+    wrapInAttributes(
+      generateType(member.typeRef, nonTgpuIdentifiers),
+      member.attributes,
+    ),
   ]);
 }
