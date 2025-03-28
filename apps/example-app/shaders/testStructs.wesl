@@ -10,16 +10,21 @@ struct TestStruct {
   standardType: vec3f,
   standardUnwrappedType: vec3<f32>,
   booleanVectorType: vec3<bool>,
+
   arrayWithLengthType: array<vec4f, 3>,
 //  arrayWithoutLengthType: array<vec2<u32>>,
   atomicType: atomic<u32>,
+  uniformPointerType: ptr<uniform, array<f32, 4>, read_only>,
+  storagePointerType: ptr<storage, array<f32, 4>, read_only>,
+
   definedAboveType: DefinedAbove,
   definedBelowType: DefinedBelow,
   definedBelowInArrayType: array<array<DefinedBelowInArray, 4>, 2>,
+
   importedType: Imported,
   importedTreeType: ImportedFromTree1,
   importedModuleType: importStructModule::ImportedFromModule,
-  pointerType: ptr<storage, array<f32>, read_only>,
+
   @align(16) alignedAttribute: DefinedAbove,
 //  @size(16) sizedAttribute: DefinedAbove,
   @location(0) locationAttribute: vec3f,

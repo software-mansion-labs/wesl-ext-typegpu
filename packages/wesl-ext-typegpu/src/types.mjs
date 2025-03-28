@@ -9,6 +9,27 @@
 /** @typedef {import("wesl").ImportStatement} ImportStatement */
 /** @typedef {import("wesl").UnknownExpressionElem} UnknownExpressionElem */
 
+/** @type {Record<string, string>} */
+const vecResolveMap = {
+  bool: 'b',
+  AbstractInt: 'i',
+  AbstractFloat: 'f',
+  i32: 'i',
+  u32: 'u',
+  f32: 'f',
+  f16: 'h',
+};
+
+/** @type {Record<string, string>} */
+const addressSpaceMap = {
+  function: 'ptrFn',
+  private: 'ptrPrivate',
+  workgroup: 'ptrWorkgroup',
+  uniform: 'ptrUniform',
+  storage: 'ptrStorage',
+  handle: 'ptrHandle',
+};
+
 /**
  * @param {TypeRefElem} typeRef
  * @param {Set<string>} nonTgpuIdentifiers
@@ -30,6 +51,8 @@ export function generateType(typeRef, nonTgpuIdentifiers) {
       return parseArrayType(typeRef, nonTgpuIdentifiers);
     case 'atomic':
       return parseAtomicType(typeRef, nonTgpuIdentifiers);
+    case 'ptr':
+      return parsePtrType(typeRef, nonTgpuIdentifiers);
     default:
       return `d.${typeName}`;
   }
@@ -97,16 +120,37 @@ function parseAtomicType(typeRef, nonTgpuIdentifiers) {
   return `d.atomic(${subType})`;
 }
 
-/** @type {Record<string, string>} */
-const vecResolveMap = {
-  bool: 'b',
-  AbstractInt: 'i',
-  AbstractFloat: 'f',
-  i32: 'i',
-  u32: 'u',
-  f32: 'f',
-  f16: 'h',
-};
+/**
+ * @param {TypeRefElem} typeRef
+ * @param {Set<string>} nonTgpuIdentifiers
+ */
+function parsePtrType(typeRef, nonTgpuIdentifiers) {
+  if (
+    !(
+      typeRef.templateParams &&
+      [2, 3].includes(typeRef.templateParams.length) &&
+      typeRef.templateParams[0].kind === 'type' &&
+      typeRef.templateParams[1].kind === 'type'
+    )
+  ) {
+    throw new Error('Unsupported ptr parameters!');
+  }
+  if (
+    !(typeRef.templateParams[2] && typeRef.templateParams[2].kind === 'type')
+  ) {
+    throw new Error('Invalid ptr memory access mode!');
+  }
+  const addressSpace = typeRef.templateParams[0].name.originalName;
+  if (!(addressSpace in addressSpaceMap)) {
+    throw new Error('Invalid ptr address space!');
+  }
+  const ptrName = addressSpaceMap[addressSpace];
+  const subType = generateType(typeRef.templateParams[1], nonTgpuIdentifiers);
+  const possibleMemoryAccessMode = typeRef.templateParams[2]?.name.originalName;
+
+  // all pointers accept exactly one argument except for ptrStorage
+  return `d.${ptrName}(${subType}${ptrName === 'ptrStorage' ? `, "${possibleMemoryAccessMode}"` : ''})`;
+}
 
 /**
  * @param {UnknownExpressionElem} element
