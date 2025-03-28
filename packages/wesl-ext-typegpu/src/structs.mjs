@@ -184,6 +184,24 @@ function generateType(typeRef, attributes, nonTgpuIdentifiers) {
     return `d.arrayOf(${subType}, ${length})`;
   }
 
+  if (typeName === 'atomic') {
+    if (
+      !(
+        typeRef.templateParams &&
+        typeRef.templateParams.length === 1 &&
+        typeRef.templateParams[0].kind === 'type'
+      )
+    ) {
+      throw new Error('Unsupported atomic parameters!');
+    }
+    const subType = generateType(
+      typeRef.templateParams[0],
+      attributes,
+      nonTgpuIdentifiers,
+    );
+    return `d.atomic(${subType})`;
+  }
+
   return `d.${typeName}`;
 }
 
