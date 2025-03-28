@@ -134,22 +134,35 @@ function generateMember(member, nonTgpuIdentifiers) {
  */
 function generateType(typeRef, attributes, nonTgpuIdentifiers) {
   const typeName = typeRef.name.originalName;
-  const tgpuType = nonTgpuIdentifiers.has(typeName)
-    ? typeName
-    : `d.${typeName}`;
+  const tgpuType =
+    !nonTgpuIdentifiers.has(typeName) && !typeName.includes('::');
 
-  const result =
-    attributes?.reduce((acc, attributeElem) => {
-      const attribute = attributeElem.attribute;
-      // if (attribute.kind === '@attribute') {
-      //   console.log(attributeToString(attribute));
-      //   let attributeString = attributeToString(attribute);
-      //   attributeString = attributeString.replace(' @', '');
-      //   attributeString = attributeString.replace(')', `, ${acc})`);
-      //   return `d.${attributeString}`;
-      // }
-      return acc;
-    }, tgpuType) ?? tgpuType;
+  if (!tgpuType) {
+    return typeName;
+  }
 
-  return result;
+  if (['vec2', 'vec3', 'vec4'].includes(typeName)) {
+    if (
+      !typeRef.templateParams ||
+      typeRef.templateParams.length !== 1 ||
+      typeRef.templateParams[0].kind !== 'type' ||
+      !(typeRef.templateParams[0].name.originalName in vecResolveMap)
+    ) {
+      throw new Error('Unsupported vector parameters!');
+    }
+    return `d.${typeName}${vecResolveMap[typeRef.templateParams[0].name.originalName]}`;
+  }
+
+  return `d.${typeName}`;
 }
+
+/** @type {Record<string, string>} */
+const vecResolveMap = {
+  bool: 'b',
+  AbstractInt: 'i',
+  AbstractFloat: 'f',
+  i32: 'i',
+  u32: 'u',
+  f32: 'f',
+  f16: 'h',
+};

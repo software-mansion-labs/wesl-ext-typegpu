@@ -1,5 +1,6 @@
 import package::importStruct::Imported;
-import package::importStructTree::{Imported1, Imported2, my_function};
+import package::importStructTree::{ImportedFromTree1, ImportedFromTree2, my_function};
+import package::importStructModule;
 
 struct DefinedAbove {
   a: vec3f,
@@ -15,7 +16,8 @@ struct TestStruct {
   definedBelowType: DefinedBelow,
   definedBelowInArrayType: array<array<DefinedBelowInArray, 4>, 2>,
   importedType: Imported,
-  importedTreeType: Imported1,
+  importedTreeType: ImportedFromTree1,
+  importedModuleType: importStructModule::ImportedFromModule,
   pointerType: ptr<storage, array<f32>, read_only>,
   @align(16) alignedAttribute: DefinedAbove,
 //  @size(16) sizedAttribute: DefinedAbove,

@@ -1,7 +1,7 @@
-struct Imported1 {
+struct ImportedFromTree1 {
   a: vec3f,
 }
-struct Imported2 {
+struct ImportedFromTree2 {
   a: vec3f,
 }
 fn my_function() -> vec2f {
