@@ -25,6 +25,7 @@ struct DefinedAbove {
   @size(16) sizedAttribute: DefinedAbove,
   @location(0) locationAttribute: vec3f,
   @interpolate(flat) interpolateAttribute: vec3f,
+  @interpolate(linear, center) interpolateTwoParamsAttribute: vec3f,
   @location(1) @interpolate(flat) locationInterpolateAttribute: vec3f,
   @builtin(position) builtinType: vec4f,
 

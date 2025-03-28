@@ -146,7 +146,8 @@ function parsePtrType(typeRef, nonTgpuIdentifiers) {
   }
   const ptrName = addressSpaceMap[addressSpace];
   const subType = generateType(typeRef.templateParams[1], nonTgpuIdentifiers);
-  const possibleMemoryAccessMode = typeRef.templateParams[2]?.name.originalName;
+  const possibleMemoryAccessMode =
+    typeRef.templateParams[2]?.name.originalName.replaceAll('_', '-');
 
   // all pointers accept exactly one argument except for ptrStorage
   return `d.${ptrName}(${subType}${ptrName === 'ptrStorage' ? `, "${possibleMemoryAccessMode}"` : ''})`;
@@ -172,12 +173,16 @@ export function wrapInAttributes(type, attributes) {
         if (
           !(
             attribute.attribute.params &&
-            attribute.attribute.params.length === 1
+            [1, 2].includes(attribute.attribute.params.length)
           )
         ) {
-          throw new Error('Only interpolation type is supported!');
+          throw new Error('Invalid interpolation parameters!');
         }
-        return `d.interpolate("${attribute.attribute.params[0].name}", ${acc})`;
+        let param = attribute.attribute.params[0].name;
+        if (attribute.attribute.params.length === 2) {
+          param += `, ${attribute.attribute.params[1].name}`;
+        }
+        return `d.interpolate("${param}", ${acc})`;
       }
       case '@builtin': {
         return `d.builtin.${attribute.attribute.param.name}`;
@@ -197,8 +202,7 @@ function tryExtractText(element) {
   if (!(element.contents.length > 0 && element.contents[0].kind === 'text')) {
     throw new Error('Unknown expression unparsable to TGSL!');
   }
-  return element.contents[0].srcModule.src.substring(
-    element.start,
-    element.end,
-  );
+  return element.contents[0].srcModule.src
+    .substring(element.start, element.end)
+    .replaceAll('_', '-');
 }

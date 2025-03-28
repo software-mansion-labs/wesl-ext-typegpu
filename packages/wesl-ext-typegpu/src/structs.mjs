@@ -1,5 +1,7 @@
 // @ts-check
 
+// AAA var length member
+
 import { genObjectFromRawEntries, genString } from 'knitwork';
 import { generateType, wrapInAttributes } from './types.mjs';
 
