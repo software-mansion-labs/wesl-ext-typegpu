@@ -1,5 +1,4 @@
 // @ts-check
-// AAA structy też mogą mieć atrybuty
 
 import path from 'node:path';
 import { genImport } from 'knitwork';

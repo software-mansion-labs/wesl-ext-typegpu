@@ -1,13 +1,12 @@
 // @ts-check
 
-// AAA var length member
-
 import { genObjectFromRawEntries, genString } from 'knitwork';
 import {
   generateType,
   VariableSizedArrayParam,
   wrapInAttributes,
 } from './types.mjs';
+import { Queue } from './queue.mjs';
 
 /** @typedef {import("wesl").AbstractElem} AbstractElem */
 /** @typedef {import("wesl").StructElem} StructElem */
@@ -49,19 +48,20 @@ export function sortStructs(structElements) {
     }
   }
 
-  /** @type {string[]} */
-  const queue = dependenciesLeft
-    .entries()
-    .filter(([_, dependencies]) => dependencies === 0)
-    .map(([key, _]) => key)
-    .toArray();
+  /** @type {Queue<string>} */
+  const queue = new Queue(
+    dependenciesLeft
+      .entries()
+      .filter(([_, dependencies]) => dependencies === 0)
+      .map(([key, _]) => key)
+      .toArray(),
+  );
   const visited = new Set();
   /** @type {StructElem[]} */
   const orderedStructs = [];
 
   while (queue.length > 0) {
-    // TODO: optimize this shift
-    const current = /** @type {string} */ (queue.shift());
+    const current = /** @type {string} */ (queue.remove());
     if (visited.has(current)) {
       continue;
     }
@@ -74,7 +74,7 @@ export function sortStructs(structElements) {
       const count = /** @type {number} */ (dependenciesLeft.get(neighbor));
       dependenciesLeft.set(neighbor, count - 1);
       if (count === 1) {
-        queue.push(neighbor);
+        queue.add(neighbor);
       }
     }
   }
@@ -138,7 +138,6 @@ function generateMember(member, nonTgpuIdentifiers) {
   member.attributes;
   return /** @type {[string, string]} */ ([
     member.name.name,
-    // TODO: Resolve custom data-types properly
     wrapInAttributes(
       generateType(member.typeRef, nonTgpuIdentifiers),
       member.attributes,
