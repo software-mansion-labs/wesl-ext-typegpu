@@ -8,14 +8,9 @@ import {
 } from './types.mjs';
 import { Queue } from './queue.mjs';
 
-/** @typedef {import("wesl").AbstractElem} AbstractElem */
 /** @typedef {import("wesl").StructElem} StructElem */
 /** @typedef {import("wesl").StructMemberElem} StructMemberElem */
-/** @typedef {import("wesl").AttributeElem} AttributeElem */
 /** @typedef {import("wesl").TypeRefElem} TypeRefElem */
-/** @typedef {import("wesl").ImportElem} ImportElem */
-/** @typedef {import("wesl").ImportStatement} ImportStatement */
-/** @typedef {import("wesl").UnknownExpressionElem} UnknownExpressionElem */
 
 /**
  * @param {StructElem[]} structElements
