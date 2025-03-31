@@ -40,8 +40,8 @@ export function generateType(typeRef, nonTgpuIdentifiers) {
   }
 
   switch (typeName) {
-    case 'vec2':
-    case 'vec3':
+    case 'vec2': // Fallthrough
+    case 'vec3': // Fallthrough
     case 'vec4':
       return parseVectorType(typeRef);
     case 'array':

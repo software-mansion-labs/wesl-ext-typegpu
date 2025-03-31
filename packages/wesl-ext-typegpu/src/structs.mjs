@@ -120,7 +120,7 @@ export function generateStruct(struct, nonTgpuIdentifiers) {
     struct.attributes,
   );
   if (isVariableLength(struct)) {
-    structDefinition = `((${VariableSizedArrayParam}: number) => ${structDefinition})`;
+    structDefinition = `(${VariableSizedArrayParam} => ${structDefinition})`;
   }
   return `export const ${name} = ${structDefinition};`;
 }

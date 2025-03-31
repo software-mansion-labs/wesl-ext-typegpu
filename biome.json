@@ -3,15 +3,6 @@
   "organizeImports": {
     "enabled": true
   },
-  "files": {
-    "ignore": [
-      "**/dist/*",
-      "**/coverage/*",
-      "**/*.d.ts",
-      "packages/tgpu-wgsl-parser/src/grammar.ts",
-      "**/*.astro"
-    ]
-  },
   "linter": {
     "enabled": true,
     "rules": {
