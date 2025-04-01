@@ -67,25 +67,25 @@ async function emitReflectJs(baseId, api) {
 function findAllImports(elements) {
   /** @type {Set<string>} */
   const imports = new Set();
+
+  /**
+   * @param {ImportStatement} importElem
+   */
+  function traverseImport(importElem) {
+    const segment = importElem.finalSegment;
+    if (segment.kind === 'import-item') {
+      imports.add(segment.name);
+    } else {
+      for (const subImport of segment.subtrees) {
+        traverseImport(subImport);
+      }
+    }
+  }
+
   for (const elem of elements) {
     if (elem.kind === 'import') {
-      traverseImport(elem.imports, imports);
+      traverseImport(elem.imports);
     }
   }
   return imports;
-}
-
-/**
- * @param {ImportStatement} importElem
- * @param {Set<string>} importsSet
- */
-function traverseImport(importElem, importsSet) {
-  const segment = importElem.finalSegment;
-  if (segment.kind === 'import-item') {
-    importsSet.add(segment.name);
-  } else {
-    for (const subImport of segment.subtrees) {
-      traverseImport(subImport, importsSet);
-    }
-  }
 }
