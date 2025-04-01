@@ -1,12 +1,14 @@
 // @ts-check
 
 /** @typedef {import("wesl").AbstractElem} AbstractElem */
+/** @typedef {import("wesl").ImportElem} ImportElem */
 /** @typedef {import("wesl").ImportStatement} ImportStatement */
 
 /**
- * @param {AbstractElem[]} elements
+ * @param {ImportElem[]} importElems
+ * @param {Set<string>} identifiersToImport
  */
-export function parseImports(elements) {
+export function parseImports(importElems, identifiersToImport) {
   /** @type {string[]} */
   const resultImports = [];
 
@@ -28,9 +30,12 @@ export function parseImports(elements) {
         .join('/');
 
     if (importElem.finalSegment.kind === 'import-item') {
-      resultImports.push(
-        `import { ${importElem.finalSegment.name} } from '${newPath}.wesl?typegpu'`,
-      );
+      const name = importElem.finalSegment.name;
+      if (identifiersToImport.has(name)) {
+        resultImports.push(
+          `import { ${importElem.finalSegment.name} } from '${newPath}.wesl?typegpu'`,
+        );
+      }
     } else {
       for (const subImport of importElem.finalSegment.subtrees) {
         traverseImport(subImport, newPath);
@@ -38,10 +43,8 @@ export function parseImports(elements) {
     }
   }
 
-  for (const elem of elements) {
-    if (elem.kind === 'import') {
-      traverseImport(elem.imports, '');
-    }
+  for (const elem of importElems) {
+    traverseImport(elem.imports, '');
   }
   return resultImports;
 }
