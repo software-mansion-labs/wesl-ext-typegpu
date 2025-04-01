@@ -1,7 +1,3 @@
-import package::importStruct::Imported;
-import package::importStructTree::{ImportedFromTree1, ImportedFromTree2, my_function};
-import package::importStructModule;
-
 struct DefinedAbove {
   a: vec3f,
 }
@@ -27,10 +23,6 @@ struct DefinedAbove {
   @interpolate(linear, center) interpolateTwoParamsAttribute: vec3f,
 //  @location(1) @interpolate(flat) locationInterpolateAttribute: vec3f,
   @builtin(position) builtinType: vec4f,
-
-//  importedType: Imported,
-//  importedTreeType: ImportedFromTree1,
-//  importedModuleType: importStructModule::ImportedFromModule,
 }
 
 struct DefinedBelow {

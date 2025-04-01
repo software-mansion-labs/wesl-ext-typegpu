@@ -4,6 +4,7 @@ import path from 'node:path';
 import { genImport } from 'knitwork';
 import { noSuffix } from 'wesl';
 import { generateStruct, sortStructs } from './structs.mjs';
+import { parseImports } from './imports.mjs';
 
 /** @typedef {import("wesl").AbstractElem} AbstractElem */
 /** @typedef {import("wesl").ImportStatement} ImportStatement */
@@ -20,20 +21,10 @@ export const typegpuExtension = {
  * @returns {Promise<string>}
  */
 async function emitReflectJs(baseId, api) {
-  const { resolvedWeslRoot, toml, tomlDir } = await api.weslToml();
-  const { dependencies = [] } = toml;
-
   const rootModule = await api.weslMain(baseId);
   const rootModuleName = noSuffix(rootModule);
 
   const registry = await api.weslRegistry();
-
-  const tomlRelative = path.relative(tomlDir, resolvedWeslRoot);
-  const debugWeslRoot = tomlRelative.replaceAll(path.sep, '/');
-
-  const bundleImports = dependencies
-    .map((p) => genImport(`${p}?typegpu`, p))
-    .join('\n');
 
   /** @type {string[]} */
   const snippets = [genImport('typegpu/data', '* as d')];
@@ -42,6 +33,8 @@ async function emitReflectJs(baseId, api) {
 
   const abstractElements =
     registry.modules[`package::${rootName}`].moduleElem.contents;
+
+  const imports = parseImports(abstractElements);
 
   const sortedStructs = sortStructs(
     abstractElements.filter((element) => element.kind === 'struct'),
@@ -54,7 +47,7 @@ async function emitReflectJs(baseId, api) {
     snippets.push(generateStruct(elem, nonTgpuIdentifiers));
   }
 
-  const src = `${bundleImports}\n${snippets.join('\n')}`;
+  const src = `${imports.join('\n')}\n${snippets.join('\n')}`;
 
   console.log(src);
 

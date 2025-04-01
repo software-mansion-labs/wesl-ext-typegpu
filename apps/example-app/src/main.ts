@@ -3,10 +3,10 @@
 import tgpu from 'typegpu';
 import { link } from 'wesl';
 import linkConfig from '../shaders/main.wesl?link';
-import { TestStruct } from '../shaders/testStructs.wesl?typegpu';
+import { TestStruct } from '../shaders/testStructsImports.wesl?typegpu';
 import './style.css';
 
-console.log(String(TestStruct));
+console.log(TestStruct);
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
