@@ -29,13 +29,12 @@ async function emitReflectJs(baseId, api) {
 
   const registry = await api.weslRegistry();
 
+  const abstractElements =
+    registry.modules[`package::${rootModuleName.replaceAll('/', '::')}`]
+      .moduleElem.contents;
+
   /** @type {string[]} */
   const snippets = [genImport('typegpu/data', '* as d')];
-
-  const rootName = path.basename(rootModuleName);
-
-  const abstractElements =
-    registry.modules[`package::${rootName}`].moduleElem.contents;
 
   const structElems = abstractElements.filter(
     (element) => element.kind === 'struct',
