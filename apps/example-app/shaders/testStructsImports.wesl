@@ -10,6 +10,6 @@ struct TestStruct {
   importedTreeType: ImportedFromTree1,
   importedNested: ImportedNested,
   importedAlias: StructAlias,
-//  importedDirectlyFromPackage: package::importStruct::Imported,
+  importedDirectlyFromPackage: package::importStruct::Imported,
   importedModuleType: importStructModule::ImportedFromModule,
 }

@@ -67,15 +67,26 @@ export function parseImports(importElems, identifiersToImport, inlinedImports) {
   for (const inlinedImport of inlinedImports) {
     const splitImport = inlinedImport.split('::');
     const importInfo = importOfAlias.get(splitImport[0]);
-    if (!importInfo) {
-      throw new Error('This should never happen.');
-    }
-    const jsified = splitImport.slice(0, -1).join('/');
-    const aliasified = splitImport.join('$');
+    if (importInfo) {
+      // continue the import
+      const jsified = splitImport.slice(0, -1).join('/');
+      const aliasified = splitImport.join('$');
 
-    resultImports.push(
-      `import { ${splitImport.at(-1)} as ${aliasified} } from '${jsified}.wesl?typegpu'`,
-    );
+      resultImports.push(
+        `import { ${splitImport.at(-1)} as ${aliasified} } from '${jsified}.wesl?typegpu'`,
+      );
+    } else {
+      const jsified = splitImport
+        .slice(0, -1)
+        .join('/')
+        .replaceAll('package', '.')
+        .replaceAll('super', '..');
+      const aliasified = splitImport.join('$');
+
+      resultImports.push(
+        `import { ${splitImport.at(-1)} as ${aliasified} } from '${jsified}.wesl?typegpu'`,
+      );
+    }
   }
 
   return resultImports;
