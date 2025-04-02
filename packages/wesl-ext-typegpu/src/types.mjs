@@ -36,7 +36,7 @@ export function generateType(typeRef, nonTgpuIdentifiers) {
   const typeName = typeRef.name.originalName;
 
   if (nonTgpuIdentifiers.has(typeName) || typeName.includes('::')) {
-    return typeName;
+    return typeName.replaceAll('::', '$');
   }
 
   switch (typeName) {

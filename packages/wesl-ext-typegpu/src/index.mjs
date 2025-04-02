@@ -44,8 +44,13 @@ async function emitReflectJs(baseId, api) {
   );
 
   const identifiersToImport = findIdentifiersToImport(structElems, importElems);
+  const inlinedImports = findInlinedImports(structElems);
 
-  const imports = parseImports(importElems, identifiersToImport);
+  const imports = parseImports(
+    importElems,
+    identifiersToImport,
+    inlinedImports,
+  );
 
   const sortedStructs = sortStructs(structElems);
 
@@ -134,4 +139,34 @@ function findUsedImports(structElements, allImports) {
   }
 
   return usedImports;
+}
+
+/**
+ * @param {StructElem[]} structElements
+ */
+function findInlinedImports(structElements) {
+  /** @type {Set<string>} */
+  const importsInStructs = new Set();
+
+  /**
+   * @param {TypeRefElem} typeRef
+   */
+  function findUsedImportsInType(typeRef) {
+    if (typeRef.name.originalName.includes('::')) {
+      importsInStructs.add(typeRef.name.originalName);
+    }
+    for (const subtype of typeRef.templateParams ?? []) {
+      if (subtype.kind === 'type') {
+        findUsedImportsInType(subtype);
+      }
+    }
+  }
+
+  for (const struct of structElements) {
+    for (const member of struct.members) {
+      findUsedImportsInType(member.typeRef);
+    }
+  }
+
+  return importsInStructs;
 }
