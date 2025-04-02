@@ -3,7 +3,9 @@
 import tgpu from 'typegpu';
 import { link } from 'wesl';
 import linkConfig from '../shaders/main.wesl?link';
+// import { TestStruct } from '../shaders/testStructsAttributes.wesl?typegpu';
 import { TestStruct } from '../shaders/testStructsImports.wesl?typegpu';
+// import { TestStruct } from '../shaders/folder/testImportFromParent.wesl?typegpu';
 import './style.css';
 
 console.log(TestStruct);

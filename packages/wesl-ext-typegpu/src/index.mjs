@@ -26,12 +26,13 @@ export const typegpuExtension = {
 async function emitReflectJs(baseId, api) {
   const rootModule = await api.weslMain(baseId);
   const rootModuleName = noSuffix(rootModule);
+  const moduleName = `./${rootModuleName}`
+    .replaceAll('/', '::')
+    .replace('.', 'package');
 
   const registry = await api.weslRegistry();
 
-  const abstractElements =
-    registry.modules[`package::${rootModuleName.replaceAll('/', '::')}`]
-      .moduleElem.contents;
+  const abstractElements = registry.modules[moduleName].moduleElem.contents;
 
   /** @type {string[]} */
   const snippets = [genImport('typegpu/data', '* as d')];
