@@ -29,15 +29,15 @@ export function parseImports(importElems, identifiersToImport) {
         )
         .join('/');
 
-    if (importElem.finalSegment.kind === 'import-item') {
-      const name = importElem.finalSegment.name;
-      if (identifiersToImport.has(name)) {
+    const segment = importElem.finalSegment;
+    if (segment.kind === 'import-item') {
+      if (identifiersToImport.has(segment.as ?? segment.name)) {
         resultImports.push(
-          `import { ${importElem.finalSegment.name} } from '${newPath}.wesl?typegpu'`,
+          `import { ${segment.name} ${segment.as ? `as ${segment.as}` : ''} } from '${newPath}.wesl?typegpu'`,
         );
       }
     } else {
-      for (const subImport of importElem.finalSegment.subtrees) {
+      for (const subImport of segment.subtrees) {
         traverseImport(subImport, newPath);
       }
     }

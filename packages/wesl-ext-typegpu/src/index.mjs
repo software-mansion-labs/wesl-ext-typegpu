@@ -1,6 +1,5 @@
 // @ts-check
 
-import path from 'node:path';
 import { genImport } from 'knitwork';
 import { noSuffix } from 'wesl';
 import { generateStruct, sortStructs } from './structs.mjs';
@@ -90,7 +89,7 @@ function findAllImports(elements) {
   function traverseImport(importElem) {
     const segment = importElem.finalSegment;
     if (segment.kind === 'import-item') {
-      imports.add(segment.name);
+      imports.add(segment.as ?? segment.name);
     } else {
       for (const subImport of segment.subtrees) {
         traverseImport(subImport);
