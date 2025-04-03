@@ -22,26 +22,6 @@ struct StructF {
   a: vec3f,
 }
 
-struct StructG {
-  a: vec3f,
-}
-
-struct StructH {
-  a: vec3f,
-}
-
-struct StructI {
-  a: vec3f,
-}
-
-struct StructJ {
-  a: vec3f,
-}
-
-struct StructK {
-  a: vec3f,
-}
-
-fn my_function() -> vec2f {
+fn function_to_ignore() -> vec2f {
   return vec4f(1.0, 0.0);
 }

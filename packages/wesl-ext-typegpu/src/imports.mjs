@@ -34,7 +34,11 @@ export function parseImports(importElems, identifiersToImport, inlinedImports) {
     const alias = splitImport.join('$');
     if (importInfo) {
       // the import extends an existing import
-      path = `${importInfo.path}/${splitImport.slice(0, -1).join('/')}`;
+      path = [
+        importInfo.path,
+        importInfo.finalSegment,
+        ...splitImport.slice(1, -1),
+      ].join('/');
     } else {
       // the import falls through
       path = splitImport

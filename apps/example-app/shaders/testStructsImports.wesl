@@ -1,13 +1,13 @@
 import bevy_pbr::forward_io::ImportToIgnore;
 import package::structs::StructA;
-import package::structs::{StructB, my_function};
-import package::folder::structs::NestedStructA;
+import package::structs::{StructB, function_to_ignore};
+import package::folder::nestedStructs::NestedStructA;
 import package::structs::StructC as StructCAlias;
 import package::structs;
-import package::folder::importNested;
+import package::folder::nestedStructs;
 import package::structs as ModuleAlias;
 import package::folder as FolderAlias;
-import package::folder::importNested as NestedAlias;
+import package::folder::nestedStructs as NestedAlias;
 
 struct TestStruct {
   imported: StructA,
@@ -15,9 +15,10 @@ struct TestStruct {
   importedNested: NestedStructA,
   importedAlias: StructCAlias,
   inlinedDirectlyFromPackage: package::structs::StructD,
+  inlinedNestedDirectlyFromPackage: package::folder::nestedStructs::NestedStructB,
   inlinedModule: structs::StructE,
-//  inlinedNestedModule: importNested::ImportedNested,
-//  inlinedAlias: ModuleAlias::StructA,
-//  inlinedFolderAlias: FolderAlias::importNested::ImportedNested,
-//  inlinedNestedAlias: NestedAlias::ImportedNested,
+  inlinedNestedModule: nestedStructs::NestedStructC,
+  inlinedAlias: ModuleAlias::StructF,
+  inlinedFolderAlias: FolderAlias::nestedStructs::NestedStructD,
+  inlinedNestedAlias: NestedAlias::NestedStructE,
 }
