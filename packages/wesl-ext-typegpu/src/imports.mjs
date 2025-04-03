@@ -10,40 +10,10 @@
  * @param {Set<string>} inlinedImports
  */
 export function parseImports(importElems, identifiersToImport, inlinedImports) {
-  /** @type {Map<string, { path: string, finalSegment: string }>} */
-  const importOfAlias = new Map();
-
   /**
-   * @param {ImportStatement} importElem
-   * @param {string} currentPath
+   * @type {Map<string, { path: string, finalSegment: string }>}
    */
-  function traverseImport(importElem, currentPath) {
-    const newPath =
-      currentPath +
-      importElem.segments
-        .map((elem) =>
-          elem.name === 'package'
-            ? '.'
-            : elem.name === 'super'
-              ? '..'
-              : elem.name,
-        )
-        .join('/');
-
-    const segment = importElem.finalSegment;
-    if (segment.kind === 'import-item') {
-      const alias = segment.as ?? segment.name;
-      importOfAlias.set(alias, { path: newPath, finalSegment: segment.name });
-    } else {
-      for (const subImport of segment.subtrees) {
-        traverseImport(subImport, newPath);
-      }
-    }
-  }
-
-  for (const elem of importElems) {
-    traverseImport(elem.imports, '');
-  }
+  const importOfAlias = generateImportMap(importElems);
 
   /** @type {string[]} */
   const resultImports = [];
@@ -101,9 +71,56 @@ export function parseImports(importElems, identifiersToImport, inlinedImports) {
 }
 
 /**
+ * @param {ImportElem[]} importElems
+ * @returns {Map<string, { path: string, finalSegment: string }>}
+ * e.g. for "import package::folder::file as NestedAlias;" we get entry
+ * "NestedAlias" => { path: "./folder", finalSegment: "file" }
+ */
+function generateImportMap(importElems) {
+  /**
+   * @type {Map<string, { path: string, finalSegment: string }>}
+   */
+  const importOfAlias = new Map();
+
+  /**
+   * @param {ImportStatement} importElem
+   * @param {string} currentPath
+   */
+  function traverseImport(importElem, currentPath) {
+    const newPath =
+      currentPath +
+      importElem.segments
+        .map((elem) =>
+          elem.name === 'package'
+            ? '.'
+            : elem.name === 'super'
+              ? '..'
+              : elem.name,
+        )
+        .join('/');
+
+    const segment = importElem.finalSegment;
+    if (segment.kind === 'import-item') {
+      const alias = segment.as ?? segment.name;
+      importOfAlias.set(alias, { path: newPath, finalSegment: segment.name });
+    } else {
+      for (const subImport of segment.subtrees) {
+        traverseImport(subImport, newPath);
+      }
+    }
+  }
+
+  for (const elem of importElems) {
+    traverseImport(elem.imports, '');
+  }
+
+  return importOfAlias;
+}
+
+/**
  * @param {string} path
  * @param {string} item
- * @param {string | undefined} [alias]
+ * @param {string} [alias]
  */
 function generateImport(path, item, alias) {
   return `import { ${item}${alias ? ` as ${alias}` : ''} } from '${path}.wesl?typegpu';`;
