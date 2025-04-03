@@ -21,46 +21,29 @@ export function parseImports(importElems, identifiersToImport, inlinedImports) {
 
   for (const identifier of identifiersToImport) {
     const importInfo = assertDefined(importOfAlias.get(identifier));
-    if (importInfo.finalSegment === identifier) {
-      resultImports.push(generateImport(importInfo.path, identifier));
-    } else {
-      resultImports.push(
-        generateImport(importInfo.path, importInfo.finalSegment, identifier),
-      );
-    }
+    resultImports.push(
+      generateImport(importInfo.path, importInfo.finalSegment, identifier),
+    );
   }
 
   for (const inlinedImport of inlinedImports) {
     const splitImport = inlinedImport.split('::');
     const importInfo = importOfAlias.get(splitImport[0]);
+    let path;
+    const item = assertDefined(splitImport.at(-1));
+    const alias = splitImport.join('$');
     if (importInfo) {
-      // continue the import
-      const jsified = `${importInfo.path}/${splitImport.slice(0, -1).join('/')}`;
-      const aliasified = splitImport.join('$');
-
-      resultImports.push(
-        generateImport(
-          jsified,
-          /** @type {string} */ (splitImport.at(-1)),
-          aliasified,
-        ),
-      );
+      // the import extends an existing import
+      path = `${importInfo.path}/${splitImport.slice(0, -1).join('/')}`;
     } else {
-      const jsified = splitImport
+      // the import falls through
+      path = splitImport
         .slice(0, -1)
         .join('/')
         .replaceAll('package', '.')
         .replaceAll('super', '..');
-      const aliasified = splitImport.join('$');
-
-      resultImports.push(
-        generateImport(
-          jsified,
-          /** @type {string} */ (splitImport.at(-1)),
-          aliasified,
-        ),
-      );
     }
+    resultImports.push(generateImport(path, item, alias));
   }
 
   return resultImports;
