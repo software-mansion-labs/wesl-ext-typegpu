@@ -33,40 +33,46 @@ async function emitReflectJs(baseId, api) {
 
   const abstractElements = registry.modules[moduleName].moduleElem.contents;
 
-  /** @type {string[]} */
-  const snippets = [genImport('typegpu/data', '* as d')];
+  const structElems = abstractElements.filter((e) => e.kind === 'struct');
+  const importElems = abstractElements.filter((e) => e.kind === 'import');
 
-  const structElems = abstractElements.filter(
-    (element) => element.kind === 'struct',
-  );
-  const importElems = abstractElements.filter(
-    (element) => element.kind === 'import',
-  );
+  const importSnippets = generateImportSnippets(structElems, importElems);
+  const structSnippets = generateStructSnippets(structElems, importElems);
 
-  const identifiersToImport = findIdentifiersToImport(structElems, importElems);
-  const inlinedImports = findInlinedImports(structElems);
-
-  const imports = parseImports(
-    importElems,
-    identifiersToImport,
-    inlinedImports,
-  );
-
-  const sortedStructs = sortStructs(structElems);
-
-  const nonTgpuIdentifiers = new Set(
-    sortedStructs.map((struct) => struct.name.ident.originalName),
-  ).union(findAllImports(abstractElements));
-
-  for (const elem of sortedStructs) {
-    snippets.push(generateStruct(elem, nonTgpuIdentifiers));
-  }
-
-  const src = `${imports.join('\n')}\n${snippets.join('\n')}`;
+  const src = [...importSnippets, ...structSnippets].join('\n');
 
   console.log(src);
 
   return src;
+}
+
+/**
+ * @param {StructElem[]} structElems
+ * @param {ImportElem[]} importElems
+ */
+function generateImportSnippets(structElems, importElems) {
+  const identifiersToImport = findIdentifiersToImport(structElems, importElems);
+  const inlinedImports = findInlinedImports(structElems);
+
+  const imports = [
+    `import * as d from 'typegpu/data'`,
+    ...parseImports(importElems, identifiersToImport, inlinedImports),
+  ];
+  return imports;
+}
+
+/**
+ * @param {StructElem[]} structElems
+ * @param {ImportElem[]} importElems
+ */
+function generateStructSnippets(structElems, importElems) {
+  const sortedStructs = sortStructs(structElems);
+
+  const nonTgpuIdentifiers = new Set(
+    sortedStructs.map((struct) => struct.name.ident.originalName),
+  ).union(findAllImports(importElems));
+
+  return sortedStructs.map((elem) => generateStruct(elem, nonTgpuIdentifiers));
 }
 
 /**
@@ -82,9 +88,9 @@ function findIdentifiersToImport(structElems, importElems) {
 }
 
 /**
- * @param {AbstractElem[]} elements
+ * @param {ImportElem[]} importElems
  */
-function findAllImports(elements) {
+function findAllImports(importElems) {
   /** @type {Set<string>} */
   const imports = new Set();
 
@@ -102,10 +108,8 @@ function findAllImports(elements) {
     }
   }
 
-  for (const elem of elements) {
-    if (elem.kind === 'import') {
-      traverseImport(elem.imports);
-    }
+  for (const elem of importElems) {
+    traverseImport(elem.imports);
   }
   return imports;
 }
