@@ -3,6 +3,7 @@
 /** @typedef {import("wesl").AbstractElem} AbstractElem */
 /** @typedef {import("wesl").ImportElem} ImportElem */
 /** @typedef {import("wesl").ImportStatement} ImportStatement */
+/** @typedef {{ path: string, finalSegment: string }} ImportInfo */
 
 /**
  * @param {ImportElem[]} importElems
@@ -10,9 +11,7 @@
  * @param {Set<string>} inlinedImports
  */
 export function parseImports(importElems, identifiersToImport, inlinedImports) {
-  /**
-   * @type {Map<string, { path: string, finalSegment: string }>}
-   */
+  /** @type {Map<string, ImportInfo>} */
   const importOfAlias = generateImportMap(importElems);
 
   /** @type {string[]} */
@@ -37,8 +36,6 @@ export function parseImports(importElems, identifiersToImport, inlinedImports) {
     const importInfo = importOfAlias.get(splitImport[0]);
     if (importInfo) {
       // continue the import
-
-      // !! use importInfo somewhere XD
       const jsified = `${importInfo.path}/${splitImport.slice(0, -1).join('/')}`;
       const aliasified = splitImport.join('$');
 
@@ -72,14 +69,12 @@ export function parseImports(importElems, identifiersToImport, inlinedImports) {
 
 /**
  * @param {ImportElem[]} importElems
- * @returns {Map<string, { path: string, finalSegment: string }>}
+ * @returns {Map<string, ImportInfo>}
  * e.g. for "import package::folder::file as NestedAlias;" we get entry
  * "NestedAlias" => { path: "./folder", finalSegment: "file" }
  */
 function generateImportMap(importElems) {
-  /**
-   * @type {Map<string, { path: string, finalSegment: string }>}
-   */
+  /** @type {Map<string, ImportInfo>} */
   const importOfAlias = new Map();
 
   /**
