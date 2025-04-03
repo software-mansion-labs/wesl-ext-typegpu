@@ -4,12 +4,20 @@ import package::importStructTree::{ImportedFromTree1, ImportedFromTree2, my_func
 import package::folder::importNested::ImportedNested;
 import package::importStructWithAlias::ImportedWithAlias as StructAlias;
 import package::importStructModule;
+import package::folder::importNested;
+import package::importStruct as ModuleAlias;
+import package::folder as FolderAlias;
+import package::folder::importNested as NestedAlias;
 
 struct TestStruct {
-  importedType: Imported,
-  importedTreeType: ImportedFromTree1,
+  imported: Imported,
+  importedTree: ImportedFromTree1,
   importedNested: ImportedNested,
   importedAlias: StructAlias,
-  importedDirectlyFromPackage: package::importStruct::Imported,
-  importedModuleType: importStructModule::ImportedFromModule,
+  inlinedDirectlyFromPackage: package::importStruct::Imported,
+  inlinedModule: importStructModule::ImportedFromModule,
+//  inlinedNestedModule: importNested::ImportedNested,
+//  inlinedAlias: ModuleAlias::Imported,
+//  inlinedFolderAlias: FolderAlias::importNested::ImportedNested,
+//  inlinedNestedAlias: NestedAlias::ImportedNested,
 }

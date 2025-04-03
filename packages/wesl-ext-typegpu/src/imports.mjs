@@ -54,12 +54,10 @@ export function parseImports(importElems, identifiersToImport, inlinedImports) {
       throw new Error('This should never happen.');
     }
     if (importInfo?.finalSegment === identifier) {
-      resultImports.push(
-        `import { ${identifier} } from '${importInfo.path}.wesl?typegpu'`,
-      );
+      resultImports.push(generateImport(importInfo.path, identifier));
     } else {
       resultImports.push(
-        `import { ${importInfo.finalSegment} as ${identifier} } from '${importInfo.path}.wesl?typegpu'`,
+        generateImport(importInfo.path, importInfo.finalSegment, identifier),
       );
     }
   }
@@ -69,11 +67,17 @@ export function parseImports(importElems, identifiersToImport, inlinedImports) {
     const importInfo = importOfAlias.get(splitImport[0]);
     if (importInfo) {
       // continue the import
-      const jsified = splitImport.slice(0, -1).join('/');
+
+      // !! use importInfo somewhere XD
+      const jsified = `${importInfo.path}/${splitImport.slice(0, -1).join('/')}`;
       const aliasified = splitImport.join('$');
 
       resultImports.push(
-        `import { ${splitImport.at(-1)} as ${aliasified} } from '${jsified}.wesl?typegpu'`,
+        generateImport(
+          jsified,
+          /** @type {string} */ (splitImport.at(-1)),
+          aliasified,
+        ),
       );
     } else {
       const jsified = splitImport
@@ -84,10 +88,23 @@ export function parseImports(importElems, identifiersToImport, inlinedImports) {
       const aliasified = splitImport.join('$');
 
       resultImports.push(
-        `import { ${splitImport.at(-1)} as ${aliasified} } from '${jsified}.wesl?typegpu'`,
+        generateImport(
+          jsified,
+          /** @type {string} */ (splitImport.at(-1)),
+          aliasified,
+        ),
       );
     }
   }
 
   return resultImports;
+}
+
+/**
+ * @param {string} path
+ * @param {string} item
+ * @param {string | undefined} [alias]
+ */
+function generateImport(path, item, alias) {
+  return `import { ${item}${alias ? ` as ${alias}` : ''} } from '${path}.wesl?typegpu';`;
 }
