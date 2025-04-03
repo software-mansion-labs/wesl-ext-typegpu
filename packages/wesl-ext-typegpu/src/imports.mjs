@@ -1,5 +1,7 @@
 // @ts-check
 
+import { assertDefined } from './utils.mjs';
+
 /** @typedef {import("wesl").AbstractElem} AbstractElem */
 /** @typedef {import("wesl").ImportElem} ImportElem */
 /** @typedef {import("wesl").ImportStatement} ImportStatement */
@@ -18,11 +20,8 @@ export function parseImports(importElems, identifiersToImport, inlinedImports) {
   const resultImports = [];
 
   for (const identifier of identifiersToImport) {
-    const importInfo = importOfAlias.get(identifier);
-    if (!importInfo) {
-      throw new Error('This should never happen.');
-    }
-    if (importInfo?.finalSegment === identifier) {
+    const importInfo = assertDefined(importOfAlias.get(identifier));
+    if (importInfo.finalSegment === identifier) {
       resultImports.push(generateImport(importInfo.path, identifier));
     } else {
       resultImports.push(
