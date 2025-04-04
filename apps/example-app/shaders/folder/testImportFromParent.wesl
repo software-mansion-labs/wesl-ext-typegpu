@@ -1,5 +1,5 @@
 import super::structs::StructA;
 
-struct TestStruct {
+struct TestStructImportFromParent {
   importedFromParent: StructA,
 }

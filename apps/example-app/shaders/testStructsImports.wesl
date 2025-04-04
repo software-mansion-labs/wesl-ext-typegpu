@@ -9,7 +9,7 @@ import package::structs as ModuleAlias;
 import package::folder as FolderAlias;
 import package::folder::nestedStructs as NestedAlias;
 
-struct TestStruct {
+struct TestStructImports {
   imported: StructA,
   importedFromTree: StructB,
   importedNested: NestedStructA,

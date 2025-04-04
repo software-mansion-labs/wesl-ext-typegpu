@@ -2,7 +2,7 @@ struct DefinedAbove {
   a: vec3f,
 }
 
-@location(0) struct TestStruct {
+struct TestStructAttributes {
   standardType: vec3f,
   standardUnwrappedType: vec3<f32>,
 //  booleanVectorType: vec3<bool>,
