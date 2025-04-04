@@ -33,12 +33,15 @@ export function generateImportSnippets(
 /**
  * @param {StructElem[]} structElements
  * @param {Set<string>} importsNamespace
+ * Returns two sets of strings.
+ * `directImports` contains identifiers of imported items, e.g. `struct1`.
+ * `inlinedImports` contains names of inlined imports, e.g. `package::file::struct2`
  */
 function findImportsUsedInStructs(structElements, importsNamespace) {
   /** @type {Set<string>} */
-  const inlinedImports = new Set();
-  /** @type {Set<string>} */
   const directImports = new Set();
+  /** @type {Set<string>} */
+  const inlinedImports = new Set();
 
   /**
    * @param {TypeRefElem} typeRef
