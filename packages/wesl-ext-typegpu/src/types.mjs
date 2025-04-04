@@ -29,13 +29,13 @@ const addressSpaceMap = {
 
 /**
  * @param {TypeRefElem} typeRef
- * @param {Set<string>} nonTgpuIdentifiers
+ * @param {Set<string>} importsNamespace
  * @returns {string}
  */
-export function generateType(typeRef, nonTgpuIdentifiers) {
+export function generateType(typeRef, importsNamespace) {
   const typeName = typeRef.name.originalName;
 
-  if (nonTgpuIdentifiers.has(typeName) || typeName.includes('::')) {
+  if (importsNamespace.has(typeName) || typeName.includes('::')) {
     return typeName.replaceAll('::', '$');
   }
 
@@ -45,11 +45,11 @@ export function generateType(typeRef, nonTgpuIdentifiers) {
     case 'vec4':
       return parseVectorType(typeRef);
     case 'array':
-      return parseArrayType(typeRef, nonTgpuIdentifiers);
+      return parseArrayType(typeRef, importsNamespace);
     case 'atomic':
-      return parseAtomicType(typeRef, nonTgpuIdentifiers);
+      return parseAtomicType(typeRef, importsNamespace);
     case 'ptr':
-      return parsePtrType(typeRef, nonTgpuIdentifiers);
+      return parsePtrType(typeRef, importsNamespace);
     default:
       return `d.${typeName}`;
   }
@@ -74,9 +74,9 @@ function parseVectorType(typeRef) {
 
 /**
  * @param {TypeRefElem} typeRef
- * @param {Set<string>} nonTgpuIdentifiers
+ * @param {Set<string>} identifiersNamespace
  */
-function parseArrayType(typeRef, nonTgpuIdentifiers) {
+function parseArrayType(typeRef, identifiersNamespace) {
   if (
     !(
       typeRef.templateParams &&
@@ -86,7 +86,7 @@ function parseArrayType(typeRef, nonTgpuIdentifiers) {
   ) {
     throw new Error('Unsupported array parameters!');
   }
-  const subType = generateType(typeRef.templateParams[0], nonTgpuIdentifiers);
+  const subType = generateType(typeRef.templateParams[0], identifiersNamespace);
   if (
     typeRef.templateParams[1] &&
     typeRef.templateParams[1].kind === 'expression'
@@ -99,9 +99,9 @@ function parseArrayType(typeRef, nonTgpuIdentifiers) {
 
 /**
  * @param {TypeRefElem} typeRef
- * @param {Set<string>} nonTgpuIdentifiers
+ * @param {Set<string>} identifiersNamespace
  */
-function parseAtomicType(typeRef, nonTgpuIdentifiers) {
+function parseAtomicType(typeRef, identifiersNamespace) {
   if (
     !(
       typeRef.templateParams &&
@@ -111,15 +111,15 @@ function parseAtomicType(typeRef, nonTgpuIdentifiers) {
   ) {
     throw new Error('Unsupported atomic parameters!');
   }
-  const subType = generateType(typeRef.templateParams[0], nonTgpuIdentifiers);
+  const subType = generateType(typeRef.templateParams[0], identifiersNamespace);
   return `d.atomic(${subType})`;
 }
 
 /**
  * @param {TypeRefElem} typeRef
- * @param {Set<string>} nonTgpuIdentifiers
+ * @param {Set<string>} identifiersNamespace
  */
-function parsePtrType(typeRef, nonTgpuIdentifiers) {
+function parsePtrType(typeRef, identifiersNamespace) {
   if (
     !(
       typeRef.templateParams &&
@@ -140,7 +140,7 @@ function parsePtrType(typeRef, nonTgpuIdentifiers) {
     throw new Error('Invalid ptr address space!');
   }
   const ptrName = addressSpaceMap[addressSpace];
-  const subType = generateType(typeRef.templateParams[1], nonTgpuIdentifiers);
+  const subType = generateType(typeRef.templateParams[1], identifiersNamespace);
   const possibleMemoryAccessMode =
     typeRef.templateParams[2]?.name.originalName.replaceAll('_', '-');
 

@@ -8,6 +8,23 @@ import {
 } from './types.mjs';
 import { Queue } from './queue.mjs';
 
+/**
+ * @param {StructElem[]} structElems
+ * @param {Set<string>} importsNamespace
+ */
+export function generateStructSnippets(structElems, importsNamespace) {
+  const sortedStructs = sortStructs(structElems);
+
+  // We need to know which identifiers are in typegpu/std and need to be prepended with 'd.'.
+  // Our approach is to find all type identifiers in the namespace introduced by imports and defined structs
+  // and to prepend everything else (that is not an inlined import) with 'd.'.
+  const nonTgpuIdentifiers = new Set(
+    sortedStructs.map((struct) => struct.name.ident.originalName),
+  ).union(importsNamespace);
+
+  return sortedStructs.map((elem) => generateStruct(elem, nonTgpuIdentifiers));
+}
+
 /** @typedef {import("wesl").StructElem} StructElem */
 /** @typedef {import("wesl").StructMemberElem} StructMemberElem */
 /** @typedef {import("wesl").TypeRefElem} TypeRefElem */
@@ -15,7 +32,7 @@ import { Queue } from './queue.mjs';
 /**
  * @param {StructElem[]} structElements
  */
-export function sortStructs(structElements) {
+function sortStructs(structElements) {
   /** @type {Map<string, StructElem>} */
   const definedStructElements = new Map(
     structElements.map((struct) => [struct.name.ident.originalName, struct]),
