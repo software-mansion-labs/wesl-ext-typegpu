@@ -1,6 +1,5 @@
 // @ts-check
 
-import { genImport } from 'knitwork';
 import { noSuffix } from 'wesl';
 import { generateStruct, sortStructs } from './structs.mjs';
 import { parseImports } from './imports.mjs';
@@ -33,11 +32,22 @@ async function emitReflectJs(baseId, api) {
 
   const abstractElements = registry.modules[moduleName].moduleElem.contents;
 
-  const structElems = abstractElements.filter((e) => e.kind === 'struct');
   const importElems = abstractElements.filter((e) => e.kind === 'import');
+  const structElems = abstractElements.filter((e) => e.kind === 'struct');
 
-  const importSnippets = generateImportSnippets(structElems, importElems);
-  const structSnippets = generateStructSnippets(structElems, importElems);
+  // identifiers that are occupied by imports
+  const importsNamespace = findAllImports(importElems);
+
+  const importSnippets = generateImportSnippets(
+    structElems,
+    importElems,
+    importsNamespace,
+  );
+  const structSnippets = generateStructSnippets(
+    structElems,
+    importElems,
+    importsNamespace,
+  );
 
   const src = [...importSnippets, ...structSnippets].join('\n');
 
@@ -49,14 +59,17 @@ async function emitReflectJs(baseId, api) {
 /**
  * @param {StructElem[]} structElems
  * @param {ImportElem[]} importElems
+ * @param {Set<string>} importsNamespace
  */
-function generateImportSnippets(structElems, importElems) {
-  const identifiersToImport = findIdentifiersToImport(structElems, importElems);
-  const inlinedImports = findInlinedImports(structElems);
+function generateImportSnippets(structElems, importElems, importsNamespace) {
+  const { inlinedImports, directImports } = findImportsUsedInStructs(
+    structElems,
+    importsNamespace,
+  );
 
   const imports = [
     `import * as d from 'typegpu/data'`,
-    ...parseImports(importElems, identifiersToImport, inlinedImports),
+    ...parseImports(importElems, directImports, inlinedImports),
   ];
   return imports;
 }
@@ -64,27 +77,19 @@ function generateImportSnippets(structElems, importElems) {
 /**
  * @param {StructElem[]} structElems
  * @param {ImportElem[]} importElems
+ * @param {Set<string>} importsNamespace
  */
-function generateStructSnippets(structElems, importElems) {
+function generateStructSnippets(structElems, importElems, importsNamespace) {
   const sortedStructs = sortStructs(structElems);
 
+  // We need to know which identifiers are in typegpu/std and need to be prepended with 'd.'.
+  // Our approach is to find all type identifiers in the namespace introduced by imports and defined structs
+  // and to prepend everything else (that is not an inlined import) with 'd.'.
   const nonTgpuIdentifiers = new Set(
     sortedStructs.map((struct) => struct.name.ident.originalName),
-  ).union(findAllImports(importElems));
+  ).union(importsNamespace);
 
   return sortedStructs.map((elem) => generateStruct(elem, nonTgpuIdentifiers));
-}
-
-/**
- * Finds items and modules that are imported in the source,
- * then narrows those to identifiers that are used in struct declarations
- * @param {StructElem[]} structElems
- * @param {ImportElem[]} importElems
- */
-function findIdentifiersToImport(structElems, importElems) {
-  const allImports = findAllImports(importElems);
-  const usedImports = findUsedImports(structElems, allImports);
-  return usedImports;
 }
 
 /**
@@ -116,18 +121,24 @@ function findAllImports(importElems) {
 
 /**
  * @param {StructElem[]} structElements
- * @param {Set<string>} allImports
+ * @param {Set<string>} importsNamespace
  */
-function findUsedImports(structElements, allImports) {
+function findImportsUsedInStructs(structElements, importsNamespace) {
   /** @type {Set<string>} */
-  const usedImports = new Set();
+  const inlinedImports = new Set();
+  /** @type {Set<string>} */
+  const directImports = new Set();
 
   /**
    * @param {TypeRefElem} typeRef
    */
   function findUsedImportsInType(typeRef) {
-    if (allImports.has(typeRef.name.originalName)) {
-      usedImports.add(typeRef.name.originalName);
+    const name = typeRef.name.originalName;
+    if (name.includes('::')) {
+      inlinedImports.add(name);
+    }
+    if (importsNamespace.has(name)) {
+      directImports.add(name);
     }
     for (const subtype of typeRef.templateParams ?? []) {
       if (subtype.kind === 'type') {
@@ -142,35 +153,5 @@ function findUsedImports(structElements, allImports) {
     }
   }
 
-  return usedImports;
-}
-
-/**
- * @param {StructElem[]} structElements
- */
-function findInlinedImports(structElements) {
-  /** @type {Set<string>} */
-  const importsInStructs = new Set();
-
-  /**
-   * @param {TypeRefElem} typeRef
-   */
-  function findUsedImportsInType(typeRef) {
-    if (typeRef.name.originalName.includes('::')) {
-      importsInStructs.add(typeRef.name.originalName);
-    }
-    for (const subtype of typeRef.templateParams ?? []) {
-      if (subtype.kind === 'type') {
-        findUsedImportsInType(subtype);
-      }
-    }
-  }
-
-  for (const struct of structElements) {
-    for (const member of struct.members) {
-      findUsedImportsInType(member.typeRef);
-    }
-  }
-
-  return importsInStructs;
+  return { inlinedImports, directImports };
 }
