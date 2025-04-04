@@ -130,7 +130,6 @@ export function generateStruct(struct, nonTgpuIdentifiers) {
  * @param {Set<string>} nonTgpuIdentifiers
  */
 function generateMember(member, nonTgpuIdentifiers) {
-  member.attributes;
   return /** @type {[string, string]} */ ([
     member.name.name,
     wrapInAttributes(
