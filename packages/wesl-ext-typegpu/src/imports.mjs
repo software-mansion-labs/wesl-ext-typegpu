@@ -32,18 +32,55 @@ export function generateImportSnippets(
 }
 
 /**
+ * @param {StructElem[]} structElements
+ * @param {Set<string>} importsNamespace
+ */
+function findImportsUsedInStructs(structElements, importsNamespace) {
+  /** @type {Set<string>} */
+  const inlinedImports = new Set();
+  /** @type {Set<string>} */
+  const directImports = new Set();
+
+  /**
+   * @param {TypeRefElem} typeRef
+   */
+  function findImportsUsedInType(typeRef) {
+    const name = typeRef.name.originalName;
+    if (name.includes('::')) {
+      inlinedImports.add(name);
+    }
+    if (importsNamespace.has(name)) {
+      directImports.add(name);
+    }
+    for (const subtype of typeRef.templateParams ?? []) {
+      if (subtype.kind === 'type') {
+        findImportsUsedInType(subtype);
+      }
+    }
+  }
+
+  for (const struct of structElements) {
+    for (const member of struct.members) {
+      findImportsUsedInType(member.typeRef);
+    }
+  }
+
+  return { inlinedImports, directImports };
+}
+
+/**
  * @param {ImportElem[]} importElems
- * @param {Set<string>} identifiersToImport
+ * @param {Set<string>} directImports
  * @param {Set<string>} inlinedImports
  */
-function parseImports(importElems, identifiersToImport, inlinedImports) {
+function parseImports(importElems, directImports, inlinedImports) {
   /** @type {Map<string, ImportInfo>} */
   const importOfAlias = generateImportMap(importElems);
 
   /** @type {string[]} */
   const resultImports = [];
 
-  for (const identifier of identifiersToImport) {
+  for (const identifier of directImports) {
     const importInfo = assertDefined(importOfAlias.get(identifier));
     resultImports.push(
       generateImport(importInfo.path, importInfo.finalSegment, identifier),
@@ -51,27 +88,31 @@ function parseImports(importElems, identifiersToImport, inlinedImports) {
   }
 
   for (const inlinedImport of inlinedImports) {
-    const splitImport = inlinedImport.split('::');
-    const importInfo = importOfAlias.get(splitImport[0]);
-    let path;
-    const item = assertDefined(splitImport.at(-1));
-    const alias = splitImport.join('$');
-    if (importInfo) {
-      // the import extends an existing import
-      path = [
-        importInfo.path,
-        importInfo.finalSegment,
-        ...splitImport.slice(1, -1),
-      ].join('/');
-    } else {
-      // the import falls through
-      path = splitImport
-        .slice(0, -1)
-        .join('/')
-        .replaceAll('package', '.')
-        .replaceAll('super', '..');
-    }
-    resultImports.push(generateImport(path, item, alias));
+    const splitInlined = inlinedImport.split('::');
+    const importInfo = importOfAlias.get(splitInlined[0]);
+    const path = importInfo
+      ? // the import extends an existing import
+        // e.g. 'module::item' where 'module' is imported
+        [
+          importInfo.path,
+          importInfo.finalSegment,
+          ...splitInlined.slice(1, -1),
+        ].join('/')
+      : // the import falls through
+        // e.g. 'package::item'
+        splitInlined
+          .slice(0, -1)
+          .join('/')
+          .replaceAll('package', '.')
+          .replaceAll('super', '..');
+
+    resultImports.push(
+      generateImport(
+        path,
+        assertDefined(splitInlined.at(-1)),
+        splitInlined.join('$'),
+      ),
+    );
   }
 
   return resultImports;
@@ -81,7 +122,7 @@ function parseImports(importElems, identifiersToImport, inlinedImports) {
  * @param {ImportElem[]} importElems
  * @returns {Map<string, ImportInfo>}
  * e.g. for "import package::folder::file as NestedAlias;" we get entry
- * "NestedAlias" => { path: "./folder", finalSegment: "file" }
+ * `"NestedAlias" => { path: "./folder", finalSegment: "file" }`
  */
 function generateImportMap(importElems) {
   /** @type {Map<string, ImportInfo>} */
@@ -129,41 +170,4 @@ function generateImportMap(importElems) {
  */
 function generateImport(path, item, alias) {
   return `import { ${item}${alias ? ` as ${alias}` : ''} } from '${path}.wesl?typegpu';`;
-}
-
-/**
- * @param {StructElem[]} structElements
- * @param {Set<string>} importsNamespace
- */
-function findImportsUsedInStructs(structElements, importsNamespace) {
-  /** @type {Set<string>} */
-  const inlinedImports = new Set();
-  /** @type {Set<string>} */
-  const directImports = new Set();
-
-  /**
-   * @param {TypeRefElem} typeRef
-   */
-  function findUsedImportsInType(typeRef) {
-    const name = typeRef.name.originalName;
-    if (name.includes('::')) {
-      inlinedImports.add(name);
-    }
-    if (importsNamespace.has(name)) {
-      directImports.add(name);
-    }
-    for (const subtype of typeRef.templateParams ?? []) {
-      if (subtype.kind === 'type') {
-        findUsedImportsInType(subtype);
-      }
-    }
-  }
-
-  for (const struct of structElements) {
-    for (const member of struct.members) {
-      findUsedImportsInType(member.typeRef);
-    }
-  }
-
-  return { inlinedImports, directImports };
 }

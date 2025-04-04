@@ -35,7 +35,6 @@ async function emitReflectJs(baseId, api) {
   const imports = abstractElements.filter((e) => e.kind === 'import');
   const structs = abstractElements.filter((e) => e.kind === 'struct');
 
-  // identifiers that are occupied by imports
   const importsNamespace = findOccupiedIdentifiers(imports);
 
   const importSnippets = generateImportSnippets(
@@ -53,6 +52,8 @@ async function emitReflectJs(baseId, api) {
 }
 
 /**
+ * This function finds all identifiers that are occupied by import statements.
+ * Identifiers occupied by other statements (var, struct etc.) are not included.
  * @param {ImportElem[]} importElems
  */
 function findOccupiedIdentifiers(importElems) {
