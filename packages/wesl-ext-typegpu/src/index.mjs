@@ -4,11 +4,8 @@ import { noSuffix } from 'wesl';
 import { generateStructSnippets } from './structs.mjs';
 import { generateImportSnippets } from './imports.mjs';
 
-/** @typedef {import("wesl").AbstractElem} AbstractElem */
-/** @typedef {import("wesl").StructElem} StructElem */
 /** @typedef {import("wesl").ImportElem} ImportElem */
 /** @typedef {import("wesl").ImportStatement} ImportStatement */
-/** @typedef {import("wesl").TypeRefElem} TypeRefElem */
 
 /** @type {import("wesl-plugin").PluginExtension} */
 export const typegpuExtension = {

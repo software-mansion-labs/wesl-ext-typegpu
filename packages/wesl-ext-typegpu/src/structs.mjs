@@ -8,6 +8,10 @@ import {
 } from './types.mjs';
 import { Queue } from './queue.mjs';
 
+/** @typedef {import("wesl").StructElem} StructElem */
+/** @typedef {import("wesl").StructMemberElem} StructMemberElem */
+/** @typedef {import("wesl").TypeRefElem} TypeRefElem */
+
 /**
  * @param {StructElem[]} structElems
  * @param {Set<string>} importsNamespace
@@ -24,10 +28,6 @@ export function generateStructSnippets(structElems, importsNamespace) {
 
   return sortedStructs.map((elem) => generateStruct(elem, nonTgpuIdentifiers));
 }
-
-/** @typedef {import("wesl").StructElem} StructElem */
-/** @typedef {import("wesl").StructMemberElem} StructMemberElem */
-/** @typedef {import("wesl").TypeRefElem} TypeRefElem */
 
 /**
  * @param {StructElem[]} structElements
