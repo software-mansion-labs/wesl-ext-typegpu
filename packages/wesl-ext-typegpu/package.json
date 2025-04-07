@@ -3,21 +3,21 @@
   "version": "0.1.0-alpha.2",
   "description": "A WESL extension that enables reflection of WESL code into JS through TypeGPU definitions.",
   "type": "module",
-  "main": "./src/index.mjs",
-  "types": "./src/index.mjs",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "scripts": {
     "build": "unbuild",
     "prepublishOnly": "node ../../scripts/prepublishOnly.mjs && unbuild"
   },
   "publishConfig": {
-    "main": "./dist/index.mjs",
+    "main": "./dist/index.ts",
     "types": "./dist/index.d.mts",
     "exports": {
       "./package.json": "./package.json",
       ".": {
         "types": "./dist/index.d.mts",
-        "module": "./dist/index.mjs",
-        "import": "./dist/index.mjs",
+        "module": "./dist/index.ts",
+        "import": "./dist/index.ts",
         "default": "./dist/index.cjs"
       }
     }

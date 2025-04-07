@@ -1,10 +1,4 @@
-// @ts-check
-
-/**
- * @template {any} T
- * @param {T} item
- */
-export function assertDefined(item) {
+export function assertDefined<T>(item: T) {
   if (item === undefined) {
     throw new Error('Not null assertion failed!');
   }

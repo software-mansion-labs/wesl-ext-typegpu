@@ -1,22 +1,13 @@
-// @ts-check
-
-/**
- * @template T
- * @type {Queue<T>}
- */
-export class Queue {
-  /** @param {Array<T>} initialElements */
-  constructor(initialElements) {
-    /** @type {[Array<T>, Array<T>]} */
+export class Queue<T> {
+  stacks: [T[], T[]];
+  constructor(initialElements: Array<T>) {
     this.stacks = [initialElements, []];
   }
 
-  /** @param {T} elem */
-  add(elem) {
+  add(elem: T) {
     this.stacks[0].push(elem);
   }
 
-  /** @returns {T | undefined} */
   remove() {
     if (this.stacks[1].length === 0) {
       this.#relocate();
@@ -30,7 +21,8 @@ export class Queue {
 
   #relocate() {
     while (this.stacks[0].length > 0) {
-      this.stacks[1].push(/** @type {T}*/ (this.stacks[0].pop()));
+      const elem = this.stacks[0].pop() as T;
+      this.stacks[1].push(elem);
     }
   }
 }
