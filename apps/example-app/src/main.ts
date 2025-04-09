@@ -2,13 +2,21 @@
 
 import tgpu from 'typegpu';
 import { link } from 'wesl';
+import { TestStructImportFromParent } from '../shaders/folder/testImportFromParent.wesl?typegpu';
 import linkConfig from '../shaders/main.wesl?link';
-import { TestStruct } from '../shaders/testStructs.wesl?typegpu';
+import { TestStructAttributes } from '../shaders/testStructsAttributes.wesl?typegpu';
+import { TestStructImports } from '../shaders/testStructsImports.wesl?typegpu';
 import './style.css';
 
-console.log(String(TestStruct));
+console.log(TestStructAttributes.propTypes);
+console.log(TestStructImports.propTypes);
+console.log(TestStructImportFromParent.propTypes);
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
+const app = document.querySelector<HTMLDivElement>('#app');
+if (!app) {
+  throw new Error('Unable to find app!');
+}
+app.innerHTML = `
   <div>
     <h1>WESL + TypeGPU</h1>
     <canvas id="canvas" width="600" height="600"></canvas>
@@ -25,7 +33,10 @@ const vertShader = await link({
 
 const module = vertShader.createShaderModule(root.device, {});
 
-const canvas = document.querySelector<HTMLCanvasElement>('#canvas')!;
+const canvas = document.querySelector<HTMLCanvasElement>('#canvas');
+if (!canvas) {
+  throw new Error('Unable to find canvas!');
+}
 const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 const context = canvas.getContext('webgpu') as GPUCanvasContext;
 
@@ -65,11 +76,10 @@ function render() {
   const commandEncoder = device.createCommandEncoder();
   const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
   passEncoder.setPipeline(renderPipeline);
-  // passEncoder.setBindGroup(0, root.unwrap(bindGroup));
   passEncoder.draw(3);
   passEncoder.end();
 
   device.queue.submit([commandEncoder.finish()]);
 }
 
-render();
+requestAnimationFrame(() => render());

@@ -13,9 +13,26 @@ import { Queue } from './queue.mjs';
 /** @typedef {import("wesl").TypeRefElem} TypeRefElem */
 
 /**
+ * @param {StructElem[]} structElems
+ * @param {Set<string>} importsNamespace
+ */
+export function generateStructSnippets(structElems, importsNamespace) {
+  const sortedStructs = sortStructs(structElems);
+
+  // We need to know which type identifiers are in typegpu/std and need to be prepended with 'd.'.
+  // Our approach is to find all type identifiers in the namespace introduced by imports and defined structs
+  // and to prepend everything else (that is not an inlined import) with 'd.'.
+  const nonTgpuIdentifiers = new Set(
+    sortedStructs.map((struct) => struct.name.ident.originalName),
+  ).union(importsNamespace);
+
+  return sortedStructs.map((elem) => generateStruct(elem, nonTgpuIdentifiers));
+}
+
+/**
  * @param {StructElem[]} structElements
  */
-export function sortStructs(structElements) {
+function sortStructs(structElements) {
   /** @type {Map<string, StructElem>} */
   const definedStructElements = new Map(
     structElements.map((struct) => [struct.name.ident.originalName, struct]),
@@ -86,24 +103,28 @@ export function sortStructs(structElements) {
  * @param {Set<string>} relevantIdentifiers
  */
 function findNeighborStructs(struct, relevantIdentifiers) {
+  /** @type {Set<string>} */
   const neighbors = new Set();
-  for (const member of struct.members) {
-    findTypeReferences(member.typeRef, neighbors);
-  }
-  return neighbors.intersection(relevantIdentifiers);
-}
 
-/**
- * @param {TypeRefElem} type
- * @param {Set<string>} referencesSet
- */
-function findTypeReferences(type, referencesSet) {
-  referencesSet.add(type.name.originalName);
-  for (const elem of type.templateParams ?? []) {
-    if ('kind' in elem && elem.kind === 'type') {
-      findTypeReferences(elem, referencesSet);
+  /**
+   * @param {TypeRefElem} type
+   */
+  function findTypeReferences(type) {
+    const name = type.name.originalName;
+    if (relevantIdentifiers.has(name)) {
+      neighbors.add(name);
+    }
+    for (const elem of type.templateParams ?? []) {
+      if ('kind' in elem && elem.kind === 'type') {
+        findTypeReferences(elem);
+      }
     }
   }
+
+  for (const member of struct.members) {
+    findTypeReferences(member.typeRef);
+  }
+  return neighbors;
 }
 
 /**
@@ -143,8 +164,9 @@ function generateMember(member, nonTgpuIdentifiers) {
  * @param {StructElem} struct
  */
 function isVariableLength(struct) {
-  const lastMember = struct.members[struct.members.length - 1];
+  const lastMember = struct.members.at(-1);
   return (
+    lastMember &&
     lastMember.typeRef.name.originalName === 'array' &&
     lastMember.typeRef.templateParams &&
     lastMember.typeRef.templateParams.length === 1

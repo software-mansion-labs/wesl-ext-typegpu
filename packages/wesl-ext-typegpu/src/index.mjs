@@ -1,11 +1,10 @@
 // @ts-check
 
-import path from 'node:path';
-import { genImport } from 'knitwork';
 import { noSuffix } from 'wesl';
-import { generateStruct, sortStructs } from './structs.mjs';
+import { generateStructSnippets } from './structs.mjs';
+import { generateImportSnippets } from './imports.mjs';
 
-/** @typedef {import("wesl").AbstractElem} AbstractElem */
+/** @typedef {import("wesl").ImportElem} ImportElem */
 /** @typedef {import("wesl").ImportStatement} ImportStatement */
 
 /** @type {import("wesl-plugin").PluginExtension} */
@@ -20,41 +19,29 @@ export const typegpuExtension = {
  * @returns {Promise<string>}
  */
 async function emitReflectJs(baseId, api) {
-  const { resolvedWeslRoot, toml, tomlDir } = await api.weslToml();
-  const { dependencies = [] } = toml;
-
   const rootModule = await api.weslMain(baseId);
   const rootModuleName = noSuffix(rootModule);
+  const moduleName = `./${rootModuleName}`
+    .replaceAll('/', '::')
+    .replace('.', 'package');
 
   const registry = await api.weslRegistry();
 
-  const tomlRelative = path.relative(tomlDir, resolvedWeslRoot);
-  const debugWeslRoot = tomlRelative.replaceAll(path.sep, '/');
+  const abstractElements = registry.modules[moduleName].moduleElem.contents;
 
-  const bundleImports = dependencies
-    .map((p) => genImport(`${p}?typegpu`, p))
-    .join('\n');
+  const imports = abstractElements.filter((e) => e.kind === 'import');
+  const structs = abstractElements.filter((e) => e.kind === 'struct');
 
-  /** @type {string[]} */
-  const snippets = [genImport('typegpu/data', '* as d')];
+  const importsNamespace = findOccupiedIdentifiers(imports);
 
-  const rootName = path.basename(rootModuleName);
-
-  const abstractElements =
-    registry.modules[`package::${rootName}`].moduleElem.contents;
-
-  const sortedStructs = sortStructs(
-    abstractElements.filter((element) => element.kind === 'struct'),
+  const importSnippets = generateImportSnippets(
+    structs,
+    imports,
+    importsNamespace,
   );
-  const nonTgpuIdentifiers = new Set(
-    sortedStructs.map((struct) => struct.name.ident.originalName),
-  ).union(findAllImports(abstractElements));
+  const structSnippets = generateStructSnippets(structs, importsNamespace);
 
-  for (const elem of sortedStructs) {
-    snippets.push(generateStruct(elem, nonTgpuIdentifiers));
-  }
-
-  const src = `${bundleImports}\n${snippets.join('\n')}`;
+  const src = [...importSnippets, ...structSnippets].join('\n');
 
   console.log(src);
 
@@ -62,9 +49,11 @@ async function emitReflectJs(baseId, api) {
 }
 
 /**
- * @param {AbstractElem[]} elements
+ * This function finds all identifiers that are occupied by import statements.
+ * Identifiers occupied by other statements (var, struct etc.) are not included.
+ * @param {ImportElem[]} importElems
  */
-function findAllImports(elements) {
+function findOccupiedIdentifiers(importElems) {
   /** @type {Set<string>} */
   const imports = new Set();
 
@@ -74,7 +63,7 @@ function findAllImports(elements) {
   function traverseImport(importElem) {
     const segment = importElem.finalSegment;
     if (segment.kind === 'import-item') {
-      imports.add(segment.name);
+      imports.add(segment.as ?? segment.name);
     } else {
       for (const subImport of segment.subtrees) {
         traverseImport(subImport);
@@ -82,10 +71,8 @@ function findAllImports(elements) {
     }
   }
 
-  for (const elem of elements) {
-    if (elem.kind === 'import') {
-      traverseImport(elem.imports);
-    }
+  for (const elem of importElems) {
+    traverseImport(elem.imports);
   }
   return imports;
 }
