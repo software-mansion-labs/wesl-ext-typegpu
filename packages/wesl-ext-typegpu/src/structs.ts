@@ -1,11 +1,11 @@
-import { genObjectFromRawEntries, genString } from "knitwork";
-import type { StructElem, StructMemberElem, TypeRefElem } from "wesl";
-import { Queue } from "./queue.ts";
+import { genObjectFromRawEntries, genString } from 'knitwork';
+import type { StructElem, StructMemberElem, TypeRefElem } from 'wesl';
+import { Queue } from './queue.ts';
 import {
   VariableSizedArrayParam,
   generateType,
   wrapInAttributes,
-} from "./types.ts";
+} from './types.ts';
 
 export function generateStructSnippets(
   structElems: StructElem[],
@@ -76,7 +76,7 @@ function sortStructs(structElements: StructElem[]): StructElem[] {
   }
 
   if (visited.size !== definedStructIdentifiers.size) {
-    throw new Error("Cyclic dependency in struct member types detected!");
+    throw new Error('Cyclic dependency in struct member types detected!');
   }
 
   return orderedStructs;
@@ -94,7 +94,7 @@ function findNeighborStructs(
       neighbors.add(name);
     }
     for (const elem of type.templateParams ?? []) {
-      if ("kind" in elem && elem.kind === "type") {
+      if ('kind' in elem && elem.kind === 'type') {
         findTypeReferences(elem);
       }
     }
@@ -141,7 +141,7 @@ function isVariableLength(struct: StructElem): boolean {
   const lastMember = struct.members.at(-1);
   return (
     !!lastMember &&
-    lastMember.typeRef.name.originalName === "array" &&
+    lastMember.typeRef.name.originalName === 'array' &&
     !!lastMember.typeRef.templateParams &&
     lastMember.typeRef.templateParams.length === 1
   );
