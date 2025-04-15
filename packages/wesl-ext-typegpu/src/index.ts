@@ -1,26 +1,32 @@
-import { type ImportElem, type ImportStatement, noSuffix } from 'wesl';
-import type { PluginExtensionApi } from 'wesl-plugin';
-import { generateImportSnippets } from './imports.ts';
-import { generateStructSnippets } from './structs.ts';
+import { type ImportElem, type ImportStatement, noSuffix } from "wesl";
+import type { PluginExtensionApi } from "wesl-plugin";
+import { generateImportSnippets } from "./imports.ts";
+import { generateStructSnippets } from "./structs.ts";
 
-export const typegpuExtension = {
-  extensionName: 'typegpu',
+export const typegpuExtension: {
+  extensionName: "typegpu";
+  emitFn: typeof emitReflectJs;
+} = {
+  extensionName: "typegpu",
   emitFn: emitReflectJs,
 };
 
-async function emitReflectJs(baseId: string, api: PluginExtensionApi) {
+async function emitReflectJs(
+  baseId: string,
+  api: PluginExtensionApi,
+): Promise<string> {
   const rootModule = await api.weslMain(baseId);
   const rootModuleName = noSuffix(rootModule);
   const moduleName = `./${rootModuleName}`
-    .replaceAll('/', '::')
-    .replace('.', 'package');
+    .replaceAll("/", "::")
+    .replace(".", "package");
 
   const registry = await api.weslRegistry();
 
   const abstractElements = registry.modules[moduleName].moduleElem.contents;
 
-  const imports = abstractElements.filter((e) => e.kind === 'import');
-  const structs = abstractElements.filter((e) => e.kind === 'struct');
+  const imports = abstractElements.filter((e) => e.kind === "import");
+  const structs = abstractElements.filter((e) => e.kind === "struct");
 
   const importsNamespace = findOccupiedIdentifiers(imports);
 
@@ -31,9 +37,7 @@ async function emitReflectJs(baseId: string, api: PluginExtensionApi) {
   );
   const structSnippets = generateStructSnippets(structs, importsNamespace);
 
-  const src = [...importSnippets, ...structSnippets].join('\n');
-
-  console.log(src);
+  const src = [...importSnippets, ...structSnippets].join("\n");
 
   return src;
 }
@@ -43,7 +47,7 @@ function findOccupiedIdentifiers(importElems: ImportElem[]) {
 
   function traverseImport(importElem: ImportStatement) {
     const segment = importElem.finalSegment;
-    if (segment.kind === 'import-item') {
+    if (segment.kind === "import-item") {
       imports.add(segment.as ?? segment.name);
     } else {
       for (const subImport of segment.subtrees) {

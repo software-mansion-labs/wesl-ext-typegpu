@@ -14,7 +14,7 @@ export function generateImportSnippets(
   structElems: StructElem[],
   importElems: ImportElem[],
   importsNamespace: Set<string>,
-) {
+): string[] {
   const { inlinedImports, directImports } = findImportsUsedInStructs(
     structElems,
     importsNamespace,
@@ -35,7 +35,7 @@ export function generateImportSnippets(
 function findImportsUsedInStructs(
   structElements: StructElem[],
   importsNamespace: Set<string>,
-) {
+): { inlinedImports: Set<string>; directImports: Set<string> } {
   const directImports = new Set<string>();
   const inlinedImports = new Set<string>();
 
@@ -67,7 +67,7 @@ function parseImports(
   importElems: ImportElem[],
   directImports: Set<string>,
   inlinedImports: Set<string>,
-) {
+): string[] {
   const importOfAlias = generateImportMap(importElems);
   const resultImports: string[] = [];
 
@@ -114,7 +114,7 @@ function parseImports(
  * For example, for "import package::folder::file as NestedAlias;" we get entry
  * `"NestedAlias" => { path: "./folder", finalSegment: "file" }`
  */
-function generateImportMap(importElems: ImportElem[]) {
+function generateImportMap(importElems: ImportElem[]): Map<string, ImportInfo> {
   const importOfAlias = new Map<string, ImportInfo>();
 
   function traverseImport(importElem: ImportStatement, currentPath: string) {
@@ -148,6 +148,10 @@ function generateImportMap(importElems: ImportElem[]) {
   return importOfAlias;
 }
 
-function generateImport(path: string, item: string, alias: string | undefined) {
+function generateImport(
+  path: string,
+  item: string,
+  alias: string | undefined,
+): string {
   return `import { ${item}${alias ? ` as ${alias}` : ''} } from '${path}.wesl?typegpu';`;
 }
