@@ -1,13 +1,8 @@
-// @ts-check
-
-/** @typedef {import("wesl").AttributeElem} AttributeElem */
-/** @typedef {import("wesl").TypeRefElem} TypeRefElem */
-/** @typedef {import("wesl").UnknownExpressionElem} UnknownExpressionElem */
+import type { AttributeElem, TypeRefElem, UnknownExpressionElem } from 'wesl';
 
 export const VariableSizedArrayParam = '__arrayLength';
 
-/** @type {Record<string, string>} */
-const vecResolveMap = {
+const vecResolveMap: Record<string, string> = {
   bool: 'b',
   AbstractInt: 'i',
   AbstractFloat: 'f',
@@ -17,8 +12,7 @@ const vecResolveMap = {
   f16: 'h',
 };
 
-/** @type {Record<string, string>} */
-const addressSpaceMap = {
+const addressSpaceMap: Record<string, string> = {
   function: 'ptrFn',
   private: 'ptrPrivate',
   workgroup: 'ptrWorkgroup',
@@ -27,12 +21,10 @@ const addressSpaceMap = {
   handle: 'ptrHandle',
 };
 
-/**
- * @param {TypeRefElem} typeRef
- * @param {Set<string>} importsNamespace
- * @returns {string}
- */
-export function generateType(typeRef, importsNamespace) {
+export function generateType(
+  typeRef: TypeRefElem,
+  importsNamespace: Set<string>,
+): string {
   const typeName = typeRef.name.originalName;
 
   if (importsNamespace.has(typeName) || typeName.includes('::')) {
@@ -55,10 +47,7 @@ export function generateType(typeRef, importsNamespace) {
   }
 }
 
-/**
- * @param {TypeRefElem} typeRef
- */
-function parseVectorType(typeRef) {
+function parseVectorType(typeRef: TypeRefElem): string {
   if (
     !(
       typeRef.templateParams &&
@@ -72,11 +61,10 @@ function parseVectorType(typeRef) {
   return `d.${typeRef.name.originalName}${vecResolveMap[typeRef.templateParams[0].name.originalName]}`;
 }
 
-/**
- * @param {TypeRefElem} typeRef
- * @param {Set<string>} identifiersNamespace
- */
-function parseArrayType(typeRef, identifiersNamespace) {
+function parseArrayType(
+  typeRef: TypeRefElem,
+  identifiersNamespace: Set<string>,
+): string {
   if (
     !(
       typeRef.templateParams &&
@@ -97,11 +85,10 @@ function parseArrayType(typeRef, identifiersNamespace) {
   return `d.arrayOf(${subType}, ${VariableSizedArrayParam})`;
 }
 
-/**
- * @param {TypeRefElem} typeRef
- * @param {Set<string>} identifiersNamespace
- */
-function parseAtomicType(typeRef, identifiersNamespace) {
+function parseAtomicType(
+  typeRef: TypeRefElem,
+  identifiersNamespace: Set<string>,
+) {
   if (
     !(
       typeRef.templateParams &&
@@ -115,11 +102,10 @@ function parseAtomicType(typeRef, identifiersNamespace) {
   return `d.atomic(${subType})`;
 }
 
-/**
- * @param {TypeRefElem} typeRef
- * @param {Set<string>} identifiersNamespace
- */
-function parsePtrType(typeRef, identifiersNamespace) {
+function parsePtrType(
+  typeRef: TypeRefElem,
+  identifiersNamespace: Set<string>,
+): string {
   if (
     !(
       typeRef.templateParams &&
@@ -148,11 +134,10 @@ function parsePtrType(typeRef, identifiersNamespace) {
   return `d.${ptrName}(${subType}${ptrName === 'ptrStorage' ? `, "${possibleMemoryAccessMode}"` : ''})`;
 }
 
-/**
- * @param {string} type
- * @param {AttributeElem[] | undefined} attributes
- */
-export function wrapInAttributes(type, attributes) {
+export function wrapInAttributes(
+  type: string,
+  attributes: AttributeElem[] | undefined,
+): string {
   if (!attributes) {
     return type;
   }
@@ -190,10 +175,7 @@ export function wrapInAttributes(type, attributes) {
   }, type);
 }
 
-/**
- * @param {UnknownExpressionElem} element
- */
-function tryExtractText(element) {
+function tryExtractText(element: UnknownExpressionElem): string {
   if (!(element.contents.length > 0 && element.contents[0].kind === 'text')) {
     throw new Error('Unknown expression unparsable to TGSL!');
   }

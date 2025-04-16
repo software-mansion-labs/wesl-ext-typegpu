@@ -1,51 +1,39 @@
-// @ts-check
-
 import { genObjectFromRawEntries, genString } from 'knitwork';
+import type { StructElem, StructMemberElem, TypeRefElem } from 'wesl';
+import { Queue } from './queue.ts';
 import {
-  generateType,
   VariableSizedArrayParam,
+  generateType,
   wrapInAttributes,
-} from './types.mjs';
-import { Queue } from './queue.mjs';
+} from './types.ts';
 
-/** @typedef {import("wesl").StructElem} StructElem */
-/** @typedef {import("wesl").StructMemberElem} StructMemberElem */
-/** @typedef {import("wesl").TypeRefElem} TypeRefElem */
-
-/**
- * @param {StructElem[]} structElems
- * @param {Set<string>} importsNamespace
- */
-export function generateStructSnippets(structElems, importsNamespace) {
+export function generateStructSnippets(
+  structElems: StructElem[],
+  importsNamespace: Set<string>,
+): string[] {
   const sortedStructs = sortStructs(structElems);
 
   // We need to know which type identifiers are in typegpu/std and need to be prepended with 'd.'.
   // Our approach is to find all type identifiers in the namespace introduced by imports and defined structs
   // and to prepend everything else (that is not an inlined import) with 'd.'.
-  const nonTgpuIdentifiers = new Set(
+  const nonTgpuIdentifiers: Set<string> = new Set(
     sortedStructs.map((struct) => struct.name.ident.originalName),
   ).union(importsNamespace);
 
   return sortedStructs.map((elem) => generateStruct(elem, nonTgpuIdentifiers));
 }
 
-/**
- * @param {StructElem[]} structElements
- */
-function sortStructs(structElements) {
-  /** @type {Map<string, StructElem>} */
-  const definedStructElements = new Map(
+function sortStructs(structElements: StructElem[]): StructElem[] {
+  const definedStructElements: Map<string, StructElem> = new Map(
     structElements.map((struct) => [struct.name.ident.originalName, struct]),
   );
 
   const definedStructIdentifiers = new Set(definedStructElements.keys());
 
-  /** @type {Map<string, number>} */
-  const dependenciesLeft = new Map(
+  const dependenciesLeft: Map<string, number> = new Map(
     definedStructIdentifiers.values().map((identifier) => [identifier, 0]),
   );
-  /** @type {Map<string, Set<string>>} */
-  const dependencyOf = new Map(
+  const dependencyOf: Map<string, Set<string>> = new Map(
     definedStructIdentifiers
       .values()
       .map((identifier) => [identifier, new Set()]),
@@ -60,8 +48,7 @@ function sortStructs(structElements) {
     }
   }
 
-  /** @type {Queue<string>} */
-  const queue = new Queue(
+  const queue: Queue<string> = new Queue(
     dependenciesLeft
       .entries()
       .filter(([_, dependencies]) => dependencies === 0)
@@ -69,21 +56,18 @@ function sortStructs(structElements) {
       .toArray(),
   );
   const visited = new Set();
-  /** @type {StructElem[]} */
-  const orderedStructs = [];
+  const orderedStructs: StructElem[] = [];
 
   while (queue.length > 0) {
-    const current = /** @type {string} */ (queue.remove());
+    const current = queue.remove() as string;
     if (visited.has(current)) {
       continue;
     }
     visited.add(current);
-    orderedStructs.push(
-      /** @type {StructElem} */ (definedStructElements.get(current)),
-    );
+    orderedStructs.push(definedStructElements.get(current) as StructElem);
 
     for (const neighbor of dependencyOf.get(current) ?? []) {
-      const count = /** @type {number} */ (dependenciesLeft.get(neighbor));
+      const count = dependenciesLeft.get(neighbor) as number;
       dependenciesLeft.set(neighbor, count - 1);
       if (count === 1) {
         queue.add(neighbor);
@@ -98,18 +82,13 @@ function sortStructs(structElements) {
   return orderedStructs;
 }
 
-/**
- * @param {StructElem} struct
- * @param {Set<string>} relevantIdentifiers
- */
-function findNeighborStructs(struct, relevantIdentifiers) {
-  /** @type {Set<string>} */
-  const neighbors = new Set();
+function findNeighborStructs(
+  struct: StructElem,
+  relevantIdentifiers: Set<string>,
+): Set<string> {
+  const neighbors: Set<string> = new Set();
 
-  /**
-   * @param {TypeRefElem} type
-   */
-  function findTypeReferences(type) {
+  function findTypeReferences(type: TypeRefElem) {
     const name = type.name.originalName;
     if (relevantIdentifiers.has(name)) {
       neighbors.add(name);
@@ -127,11 +106,10 @@ function findNeighborStructs(struct, relevantIdentifiers) {
   return neighbors;
 }
 
-/**
- * @param {StructElem} struct
- * @param {Set<string>} nonTgpuIdentifiers
- */
-export function generateStruct(struct, nonTgpuIdentifiers) {
+export function generateStruct(
+  struct: StructElem,
+  nonTgpuIdentifiers: Set<string>,
+): string {
   const name = struct.name.ident.originalName;
   const fieldsCode = genObjectFromRawEntries(
     struct.members.map((member) => generateMember(member, nonTgpuIdentifiers)),
@@ -146,29 +124,25 @@ export function generateStruct(struct, nonTgpuIdentifiers) {
   return `export const ${name} = ${structDefinition};`;
 }
 
-/**
- * @param {StructMemberElem} member
- * @param {Set<string>} nonTgpuIdentifiers
- */
-function generateMember(member, nonTgpuIdentifiers) {
-  return /** @type {[string, string]} */ ([
+function generateMember(
+  member: StructMemberElem,
+  nonTgpuIdentifiers: Set<string>,
+): [string, string] {
+  return [
     member.name.name,
     wrapInAttributes(
       generateType(member.typeRef, nonTgpuIdentifiers),
       member.attributes,
     ),
-  ]);
+  ];
 }
 
-/**
- * @param {StructElem} struct
- */
-function isVariableLength(struct) {
+function isVariableLength(struct: StructElem): boolean {
   const lastMember = struct.members.at(-1);
   return (
-    lastMember &&
+    !!lastMember &&
     lastMember.typeRef.name.originalName === 'array' &&
-    lastMember.typeRef.templateParams &&
+    !!lastMember.typeRef.templateParams &&
     lastMember.typeRef.templateParams.length === 1
   );
 }

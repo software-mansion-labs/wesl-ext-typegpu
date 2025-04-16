@@ -1,24 +1,20 @@
-// @ts-check
+import { type ImportElem, type ImportStatement, noSuffix } from 'wesl';
+import type { PluginExtensionApi } from 'wesl-plugin';
+import { generateImportSnippets } from './imports.ts';
+import { generateStructSnippets } from './structs.ts';
 
-import { noSuffix } from 'wesl';
-import { generateStructSnippets } from './structs.mjs';
-import { generateImportSnippets } from './imports.mjs';
-
-/** @typedef {import("wesl").ImportElem} ImportElem */
-/** @typedef {import("wesl").ImportStatement} ImportStatement */
-
-/** @type {import("wesl-plugin").PluginExtension} */
-export const typegpuExtension = {
+export const typegpuExtension: {
+  extensionName: 'typegpu';
+  emitFn: typeof emitReflectJs;
+} = {
   extensionName: 'typegpu',
   emitFn: emitReflectJs,
 };
 
-/**
- * @param {string} baseId
- * @param {import("wesl-plugin").PluginExtensionApi} api
- * @returns {Promise<string>}
- */
-async function emitReflectJs(baseId, api) {
+async function emitReflectJs(
+  baseId: string,
+  api: PluginExtensionApi,
+): Promise<string> {
   const rootModule = await api.weslMain(baseId);
   const rootModuleName = noSuffix(rootModule);
   const moduleName = `./${rootModuleName}`
@@ -43,24 +39,13 @@ async function emitReflectJs(baseId, api) {
 
   const src = [...importSnippets, ...structSnippets].join('\n');
 
-  console.log(src);
-
   return src;
 }
 
-/**
- * This function finds all identifiers that are occupied by import statements.
- * Identifiers occupied by other statements (var, struct etc.) are not included.
- * @param {ImportElem[]} importElems
- */
-function findOccupiedIdentifiers(importElems) {
-  /** @type {Set<string>} */
-  const imports = new Set();
+function findOccupiedIdentifiers(importElems: ImportElem[]) {
+  const imports = new Set<string>();
 
-  /**
-   * @param {ImportStatement} importElem
-   */
-  function traverseImport(importElem) {
+  function traverseImport(importElem: ImportStatement) {
     const segment = importElem.finalSegment;
     if (segment.kind === 'import-item') {
       imports.add(segment.as ?? segment.name);
