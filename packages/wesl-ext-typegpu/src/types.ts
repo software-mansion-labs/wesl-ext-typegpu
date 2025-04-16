@@ -47,7 +47,7 @@ export function generateType(
   }
 }
 
-function parseVectorType(typeRef: TypeRefElem) {
+function parseVectorType(typeRef: TypeRefElem): string {
   if (
     !(
       typeRef.templateParams &&
@@ -64,7 +64,7 @@ function parseVectorType(typeRef: TypeRefElem) {
 function parseArrayType(
   typeRef: TypeRefElem,
   identifiersNamespace: Set<string>,
-) {
+): string {
   if (
     !(
       typeRef.templateParams &&
@@ -102,7 +102,10 @@ function parseAtomicType(
   return `d.atomic(${subType})`;
 }
 
-function parsePtrType(typeRef: TypeRefElem, identifiersNamespace: Set<string>) {
+function parsePtrType(
+  typeRef: TypeRefElem,
+  identifiersNamespace: Set<string>,
+): string {
   if (
     !(
       typeRef.templateParams &&
@@ -134,7 +137,7 @@ function parsePtrType(typeRef: TypeRefElem, identifiersNamespace: Set<string>) {
 export function wrapInAttributes(
   type: string,
   attributes: AttributeElem[] | undefined,
-) {
+): string {
   if (!attributes) {
     return type;
   }
@@ -172,7 +175,7 @@ export function wrapInAttributes(
   }, type);
 }
 
-function tryExtractText(element: UnknownExpressionElem) {
+function tryExtractText(element: UnknownExpressionElem): string {
   if (!(element.contents.length > 0 && element.contents[0].kind === 'text')) {
     throw new Error('Unknown expression unparsable to TGSL!');
   }

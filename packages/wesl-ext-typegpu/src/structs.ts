@@ -10,7 +10,7 @@ import {
 export function generateStructSnippets(
   structElems: StructElem[],
   importsNamespace: Set<string>,
-) {
+): string[] {
   const sortedStructs = sortStructs(structElems);
 
   // We need to know which type identifiers are in typegpu/std and need to be prepended with 'd.'.
@@ -23,7 +23,7 @@ export function generateStructSnippets(
   return sortedStructs.map((elem) => generateStruct(elem, nonTgpuIdentifiers));
 }
 
-function sortStructs(structElements: StructElem[]) {
+function sortStructs(structElements: StructElem[]): StructElem[] {
   const definedStructElements: Map<string, StructElem> = new Map(
     structElements.map((struct) => [struct.name.ident.originalName, struct]),
   );
@@ -85,7 +85,7 @@ function sortStructs(structElements: StructElem[]) {
 function findNeighborStructs(
   struct: StructElem,
   relevantIdentifiers: Set<string>,
-) {
+): Set<string> {
   const neighbors: Set<string> = new Set();
 
   function findTypeReferences(type: TypeRefElem) {
@@ -109,7 +109,7 @@ function findNeighborStructs(
 export function generateStruct(
   struct: StructElem,
   nonTgpuIdentifiers: Set<string>,
-) {
+): string {
   const name = struct.name.ident.originalName;
   const fieldsCode = genObjectFromRawEntries(
     struct.members.map((member) => generateMember(member, nonTgpuIdentifiers)),
@@ -127,22 +127,22 @@ export function generateStruct(
 function generateMember(
   member: StructMemberElem,
   nonTgpuIdentifiers: Set<string>,
-) {
+): [string, string] {
   return [
     member.name.name,
     wrapInAttributes(
       generateType(member.typeRef, nonTgpuIdentifiers),
       member.attributes,
     ),
-  ] as [string, string];
+  ];
 }
 
-function isVariableLength(struct: StructElem) {
+function isVariableLength(struct: StructElem): boolean {
   const lastMember = struct.members.at(-1);
   return (
-    lastMember &&
+    !!lastMember &&
     lastMember.typeRef.name.originalName === 'array' &&
-    lastMember.typeRef.templateParams &&
+    !!lastMember.typeRef.templateParams &&
     lastMember.typeRef.templateParams.length === 1
   );
 }

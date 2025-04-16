@@ -1,21 +1,22 @@
 export class Queue<T> {
   stacks: [T[], T[]];
+
   constructor(initialElements: Array<T>) {
     this.stacks = [initialElements, []];
   }
 
-  add(elem: T) {
+  add(elem: T): void {
     this.stacks[0].push(elem);
   }
 
-  remove() {
+  remove(): T | undefined {
     if (this.stacks[1].length === 0) {
       this.#relocate();
     }
     return this.stacks[1].pop();
   }
 
-  get length() {
+  get length(): number {
     return this.stacks[0].length + this.stacks[1].length;
   }
 

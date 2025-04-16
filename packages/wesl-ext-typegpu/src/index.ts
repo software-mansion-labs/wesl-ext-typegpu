@@ -3,12 +3,18 @@ import type { PluginExtensionApi } from 'wesl-plugin';
 import { generateImportSnippets } from './imports.ts';
 import { generateStructSnippets } from './structs.ts';
 
-export const typegpuExtension = {
+export const typegpuExtension: {
+  extensionName: 'typegpu';
+  emitFn: typeof emitReflectJs;
+} = {
   extensionName: 'typegpu',
   emitFn: emitReflectJs,
 };
 
-async function emitReflectJs(baseId: string, api: PluginExtensionApi) {
+async function emitReflectJs(
+  baseId: string,
+  api: PluginExtensionApi,
+): Promise<string> {
   const rootModule = await api.weslMain(baseId);
   const rootModuleName = noSuffix(rootModule);
   const moduleName = `./${rootModuleName}`
@@ -32,8 +38,6 @@ async function emitReflectJs(baseId: string, api: PluginExtensionApi) {
   const structSnippets = generateStructSnippets(structs, importsNamespace);
 
   const src = [...importSnippets, ...structSnippets].join('\n');
-
-  console.log(src);
 
   return src;
 }

@@ -10,33 +10,25 @@
     "prepublishOnly": "node ../../scripts/prepublishOnly.mjs && unbuild"
   },
   "publishConfig": {
-    "main": "./dist/index.ts",
+    "main": "./dist/index.mjs",
     "types": "./dist/index.d.mts",
     "exports": {
       "./package.json": "./package.json",
       ".": {
-        "types": "./dist/index.d.mts",
-        "module": "./dist/index.ts",
-        "import": "./dist/index.ts",
-        "default": "./dist/index.cjs"
+        "require": {
+          "types": "./dist/index.d.cts",
+          "default": "./dist/index.cjs"
+        },
+        "default": {
+          "types": "./dist/index.d.mts",
+          "default": "./dist/index.mjs"
+        }
       }
     }
   },
-  "files": [
-    "package.json",
-    "README.md",
-    "LICENSE.md",
-    "dist/**"
-  ],
+  "files": ["package.json", "README.md", "LICENSE.md", "dist/**"],
   "sideEffects": false,
-  "keywords": [
-    "wesl",
-    "plugin",
-    "extension",
-    "typegpu",
-    "wgsl",
-    "webgpu"
-  ],
+  "keywords": ["wesl", "plugin", "extension", "typegpu", "wgsl", "webgpu"],
   "license": "MIT",
   "packageManager": "pnpm@10.6.3+sha512.bb45e34d50a9a76e858a95837301bfb6bd6d35aea2c5d52094fa497a467c43f5c440103ce2511e9e0a2f89c3d6071baac3358fc68ac6fb75e2ceb3d2736065e6",
   "devDependencies": {
@@ -47,7 +39,8 @@
     "wesl-plugin": "0.6.0-rc4"
   },
   "peerDependencies": {
-    "wesl": "0.6.0-rc4"
+    "wesl": "0.6.0-rc4",
+    "wesl-plugin": "0.6.0-rc4"
   },
   "dependencies": {
     "knitwork": "^1.2.0"
