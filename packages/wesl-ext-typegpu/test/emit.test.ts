@@ -355,6 +355,39 @@ describe('structs', () => {
     `);
   });
 
+  it('orders chains and diamonds of dependencies, keeping source order otherwise', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          struct Top { left: Left, right: Right }
+          struct Left { base: Base }
+          struct Independent { a: f32 }
+          struct Right { base: array<Base, 2>, left: Left }
+          struct Base { a: f32 }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const Independent = d.struct({
+        a: d.f32
+      }).$name("Independent");
+      export const Base = d.struct({
+        a: d.f32
+      }).$name("Base");
+      export const Left = d.struct({
+        base: Base
+      }).$name("Left");
+      export const Right = d.struct({
+        base: d.arrayOf(Base, 2),
+        left: Left
+      }).$name("Right");
+      export const Top = d.struct({
+        left: Left,
+        right: Right
+      }).$name("Top");"
+    `);
+  });
+
   it('turns runtime-sized structs into functions of the array length', async () => {
     expect(
       await emit({
@@ -743,6 +776,29 @@ describe('imports', () => {
         importedFromTree: StructB,
         importedNested: NestedStructA,
         importedAlias: StructCAlias
+      }).$name("Imports");"
+    `);
+  });
+
+  it('treats aliased items in import trees as imported names', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          import package::folder::{nestedStructs::{NestedStructA as A, NestedStructB}, unused::Thing};
+
+          struct Imports {
+            aliased: array<A, 2>,
+            plain: NestedStructB,
+          }
+        `,
+        'folder/nestedStructs.wesl': nestedStructs,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { NestedStructA as A, NestedStructB } from './folder/nestedStructs.wesl?typegpu';
+      export const Imports = d.struct({
+        aliased: d.arrayOf(A, 2),
+        plain: NestedStructB
       }).$name("Imports");"
     `);
   });

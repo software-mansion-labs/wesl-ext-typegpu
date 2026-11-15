@@ -17,10 +17,5 @@
     "oxlint": "^1.93.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }
