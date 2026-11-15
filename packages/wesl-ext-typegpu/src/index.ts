@@ -39,6 +39,7 @@ async function emitReflectJs(
     structs,
     imports,
     importsNamespace,
+    moduleName,
   );
   const structSnippets = generateStructSnippets(structs, importsNamespace);
 

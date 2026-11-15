@@ -1,5 +1,7 @@
+import { posix } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
-import { RecordResolver } from 'wesl';
+import { link, RecordResolver } from 'wesl';
 import type { PluginExtensionApi } from 'wesl-plugin';
 
 import { typegpuExtension } from '../src/index.ts';
@@ -250,27 +252,193 @@ describe('imports', () => {
       }).$name("InlinedImports");"
     `);
   });
+});
 
-  it('resolves super:: imports relative to the module', async () => {
-    expect(
-      await emit(
-        {
-          'folder/main.wesl': `
-            import super::structs::StructA;
+/**
+ * Asserts that every `?typegpu` specifier in the emitted code, resolved relative to the
+ * emitted module's directory like a bundler would, points at one of the given sources.
+ */
+function expectImportsToResolve(
+  code: string,
+  weslSrc: Record<string, string>,
+  modulePath: string,
+) {
+  const specifiers = [...code.matchAll(/from '(.*)\?typegpu'/g)].map(
+    (m) => m[1] as string,
+  );
+  expect(specifiers.length).toBeGreaterThan(0);
+  for (const specifier of specifiers) {
+    const resolved = posix.join(posix.dirname(modulePath), specifier);
+    expect(Object.keys(weslSrc)).toContain(resolved);
+  }
+}
 
-            struct ImportFromParent { importedFromParent: StructA }
-          `,
-          'structs.wesl': structs,
+describe('import paths', () => {
+  it('resolves the first super:: to the directory of the module', async () => {
+    const weslSrc = {
+      'folder/main.wesl': `
+        import super::structs::StructA;
+
+        struct ImportFromSibling { importedFromSibling: StructA }
+      `,
+      'folder/structs.wesl': structs,
+    };
+    // the WESL linker agrees on where super:: points
+    await expect(
+      link({
+        weslSrc: {
+          ...weslSrc,
+          'folder/main.wesl': `${weslSrc['folder/main.wesl']}
+            @compute @workgroup_size(1) fn main() { let s = StructA(vec3f()); }`,
         },
-        'folder/main.wesl',
-      ),
-    ).toMatchInlineSnapshot(`
+        rootModuleName: 'folder/main.wesl',
+      }),
+    ).resolves.toBeDefined();
+
+    const code = await emit(weslSrc, 'folder/main.wesl');
+    expectImportsToResolve(code, weslSrc, 'folder/main.wesl');
+    expect(code).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data'
+      import { StructA as StructA } from './structs.wesl?typegpu';
+      export const ImportFromSibling = d.struct({
+        importedFromSibling: StructA
+      }).$name("ImportFromSibling");"
+    `);
+  });
+
+  it('resolves each further super:: one directory up', async () => {
+    const weslSrc = {
+      'a/b/main.wesl': `
+        import super::super::structs::StructA;
+        import super::super::super::structs::StructB;
+
+        struct ImportFromParents {
+          fromParent: StructA,
+          fromGrandparent: StructB,
+          inlinedFromSibling: super::sibling::NestedStructA,
+        }
+      `,
+      'a/b/sibling.wesl': nestedStructs,
+      'a/structs.wesl': structs,
+      'structs.wesl': structs,
+    };
+    const code = await emit(weslSrc, 'a/b/main.wesl');
+    expectImportsToResolve(code, weslSrc, 'a/b/main.wesl');
+    expect(code).toMatchInlineSnapshot(`
       "import * as d from 'typegpu/data'
       import { StructA as StructA } from '../structs.wesl?typegpu';
-      export const ImportFromParent = d.struct({
-        importedFromParent: StructA
-      }).$name("ImportFromParent");"
+      import { StructB as StructB } from '../../structs.wesl?typegpu';
+      import { NestedStructA as super$sibling$NestedStructA } from './sibling.wesl?typegpu';
+      export const ImportFromParents = d.struct({
+        fromParent: StructA,
+        fromGrandparent: StructB,
+        inlinedFromSibling: super$sibling$NestedStructA
+      }).$name("ImportFromParents");"
     `);
+  });
+
+  it('resolves package:: against the WESL root from a nested module', async () => {
+    const weslSrc = {
+      'a/b/main.wesl': `
+        import package::structs::StructA;
+        import package::a::b::sibling::NestedStructA;
+        import package::a::other::NestedStructB;
+
+        struct ImportFromPackage {
+          fromRoot: StructA,
+          fromSibling: NestedStructA,
+          fromCousin: NestedStructB,
+          inlinedFromRoot: package::structs::StructB,
+          inlinedFromCousin: package::a::other::NestedStructC,
+        }
+      `,
+      'structs.wesl': structs,
+      'a/b/sibling.wesl': nestedStructs,
+      'a/other.wesl': nestedStructs,
+    };
+    const code = await emit(weslSrc, 'a/b/main.wesl');
+    expectImportsToResolve(code, weslSrc, 'a/b/main.wesl');
+    expect(code).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data'
+      import { StructA as StructA } from '../../structs.wesl?typegpu';
+      import { NestedStructA as NestedStructA } from './sibling.wesl?typegpu';
+      import { NestedStructB as NestedStructB } from '../other.wesl?typegpu';
+      import { StructB as package$structs$StructB } from '../../structs.wesl?typegpu';
+      import { NestedStructC as package$a$other$NestedStructC } from '../other.wesl?typegpu';
+      export const ImportFromPackage = d.struct({
+        fromRoot: StructA,
+        fromSibling: NestedStructA,
+        fromCousin: NestedStructB,
+        inlinedFromRoot: package$structs$StructB,
+        inlinedFromCousin: package$a$other$NestedStructC
+      }).$name("ImportFromPackage");"
+    `);
+  });
+
+  it('keeps separators in nested import trees', async () => {
+    const weslSrc = {
+      'main.wesl': `
+        import package::{structs::StructA, folder::{nested::{NestedStructA}}};
+        import super::{structs::{StructB}};
+
+        struct ImportFromTrees {
+          a: StructA,
+          b: StructB,
+          nested: NestedStructA,
+        }
+      `,
+      'structs.wesl': structs,
+      'folder/nested.wesl': nestedStructs,
+    };
+    const code = await emit(weslSrc);
+    expectImportsToResolve(code, weslSrc, 'main.wesl');
+    expect(code).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data'
+      import { StructA as StructA } from './structs.wesl?typegpu';
+      import { StructB as StructB } from './structs.wesl?typegpu';
+      import { NestedStructA as NestedStructA } from './folder/nested.wesl?typegpu';
+      export const ImportFromTrees = d.struct({
+        a: StructA,
+        b: StructB,
+        nested: NestedStructA
+      }).$name("ImportFromTrees");"
+    `);
+  });
+
+  it('does not rewrite segments that merely contain package or super', async () => {
+    const weslSrc = {
+      'main.wesl': `
+        import package::my_package::supersample as superalias;
+
+        struct Lookalikes {
+          inlined: package::my_package::supersample::NestedStructA,
+          aliased: superalias::NestedStructB,
+        }
+      `,
+      'my_package/supersample.wesl': nestedStructs,
+    };
+    const code = await emit(weslSrc);
+    expectImportsToResolve(code, weslSrc, 'main.wesl');
+    expect(code).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data'
+      import { NestedStructA as package$my_package$supersample$NestedStructA } from './my_package/supersample.wesl?typegpu';
+      import { NestedStructB as superalias$NestedStructB } from './my_package/supersample.wesl?typegpu';
+      export const Lookalikes = d.struct({
+        inlined: package$my_package$supersample$NestedStructA,
+        aliased: superalias$NestedStructB
+      }).$name("Lookalikes");"
+    `);
+  });
+
+  it('rejects super:: paths that go above the WESL root', async () => {
+    await expect(
+      emit({
+        'main.wesl': `
+          import super::super::structs::StructA;
+          struct S { a: StructA }
+        `,
+      }),
+    ).rejects.toThrow(/goes above the WESL root/);
   });
 });
 
