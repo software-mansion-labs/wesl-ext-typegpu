@@ -2,7 +2,6 @@ import { type BatchModuleResolver, declsOfKind } from 'wesl';
 
 import { ModuleTranslationError, formatLocation, locate } from './errors.ts';
 import {
-  findOccupiedIdentifiers,
   generateImportMap,
   moduleLocation,
   resolveImportedName,
@@ -153,7 +152,6 @@ function analyzeModule(
     ...declsOfKind(ast.moduleElem, 'alias'),
   ];
 
-  const importsNamespace = findOccupiedIdentifiers(importElems);
   const importOfAlias = generateImportMap(importElems, location);
   const declNames = new Set(
     declElems.map((decl) => decl.name.ident.originalName),
@@ -166,7 +164,7 @@ function analyzeModule(
     const dependencies: Dependency[] = [];
     for (const typeName of declTypeNames(elem)) {
       // same precedence as `generateType`: imports first, then declarations of this module
-      if (importsNamespace.has(typeName) || typeName.includes('::')) {
+      if (importOfAlias.has(typeName) || typeName.includes('::')) {
         const resolved = resolveImportedName(typeName, importOfAlias, location);
         if (resolved?.kind !== 'local') {
           continue;

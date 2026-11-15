@@ -17,7 +17,6 @@ import {
 import type { ExpressionContext } from './expressions.ts';
 import { importBinding } from './imports.ts';
 import { exportBinding, lazyExportBinding, lazyGetterName } from './names.ts';
-import { Queue } from './queue.ts';
 import { asTypeRef, generateType, wrapInAttributes } from './types.ts';
 
 /** A module-level declaration that is emitted as an exported TypeGPU schema. */
@@ -235,67 +234,54 @@ function typeRefsOf(decl: TypeDeclElem): TypeRefElem[] {
     : decl.members.map((member) => member.typeRef);
 }
 
+interface DeclNode {
+  decl: TypeDeclElem;
+  dependencies: Set<DeclNode>;
+  dependenciesLeft: number;
+  dependents: DeclNode[];
+}
+
 function sortDecls(declElements: TypeDeclElem[]): TypeDeclElem[] {
-  const definedDeclElements: Map<string, TypeDeclElem> = new Map(
-    declElements.map((decl) => [declName(decl), decl]),
+  const nodes = new Map<string, DeclNode>(
+    declElements.map((decl) => [
+      declName(decl),
+      { decl, dependencies: new Set(), dependenciesLeft: 0, dependents: [] },
+    ]),
   );
 
-  const definedIdentifiers = new Set(definedDeclElements.keys());
-
-  const dependenciesLeft: Map<string, number> = new Map(
-    definedIdentifiers.values().map((identifier) => [identifier, 0]),
-  );
-  const dependenciesOf: Map<string, Set<string>> = new Map();
-  const dependencyOf: Map<string, Set<string>> = new Map(
-    definedIdentifiers.values().map((identifier) => [identifier, new Set()]),
-  );
-
-  for (const [identifier, decl] of definedDeclElements) {
-    const dependencies = findNeighborDecls(decl, definedIdentifiers);
-    dependenciesOf.set(identifier, dependencies);
-    dependenciesLeft.set(identifier, dependencies.size);
-
-    for (const neighbor of dependencies) {
-      dependencyOf.get(neighbor)?.add(identifier);
+  for (const node of nodes.values()) {
+    node.dependencies = findNeighborDecls(node.decl, nodes);
+    node.dependenciesLeft = node.dependencies.size;
+    for (const dependency of node.dependencies) {
+      dependency.dependents.push(node);
     }
   }
 
-  const queue: Queue<string> = new Queue(
-    dependenciesLeft
-      .entries()
-      .filter(([, dependencies]) => dependencies === 0)
-      .map(([key]) => key)
-      .toArray(),
-  );
-  const visited = new Set<string>();
-  const orderedDecls: TypeDeclElem[] = [];
+  // Kahn's algorithm, using the output array as the queue.
+  const ordered = nodes
+    .values()
+    .filter((node) => node.dependenciesLeft === 0)
+    .toArray();
 
-  while (queue.length > 0) {
-    const current = queue.remove() as string;
-    if (visited.has(current)) {
-      continue;
-    }
-    visited.add(current);
-    orderedDecls.push(definedDeclElements.get(current) as TypeDeclElem);
-
-    for (const neighbor of dependencyOf.get(current) ?? []) {
-      const count = dependenciesLeft.get(neighbor) as number;
-      dependenciesLeft.set(neighbor, count - 1);
-      if (count === 1) {
-        queue.add(neighbor);
+  for (let i = 0; i < ordered.length; i++) {
+    for (const dependent of ordered[i].dependents) {
+      dependent.dependenciesLeft--;
+      if (dependent.dependenciesLeft === 0) {
+        ordered.push(dependent);
       }
     }
   }
 
-  if (visited.size !== definedIdentifiers.size) {
-    const cycle = findCycle(definedIdentifiers, visited, dependenciesOf);
-    const first = definedDeclElements.get(cycle[0]) as TypeDeclElem;
+  if (ordered.length !== nodes.size) {
+    const cycle = findCycle(nodes.values(), new Set(ordered));
+    const first = cycle[0].decl;
+    const cycleNames = [...cycle, cycle[0]].map((node) => declName(node.decl));
     throw new ModuleTranslationError(
-      `${formatLocation(locate(first, first.start))}: Cyclic dependency between types: ${[...cycle, cycle[0]].join(' -> ')}`,
+      `${formatLocation(locate(first, first.start))}: Cyclic dependency between types: ${cycleNames.join(' -> ')}`,
     );
   }
 
-  return orderedDecls;
+  return ordered.map((node) => node.decl);
 }
 
 /**
@@ -303,28 +289,30 @@ function sortDecls(declElements: TypeDeclElem[]): TypeDeclElem[] {
  * so following those dependencies from any of them must eventually loop.
  */
 function findCycle(
-  identifiers: Set<string>,
-  visited: Set<string>,
-  dependenciesOf: Map<string, Set<string>>,
-): string[] {
-  const path: string[] = [];
-  let current = [...identifiers].find((id) => !visited.has(id)) as string;
-  while (!path.includes(current)) {
+  nodes: Iterable<DeclNode>,
+  visited: Set<DeclNode>,
+): DeclNode[] {
+  const isUnvisited = (node: DeclNode) => !visited.has(node);
+  const path: DeclNode[] = [];
+  let current = Iterator.from(nodes).find(isUnvisited);
+  while (current && !path.includes(current)) {
     path.push(current);
-    current = [...(dependenciesOf.get(current) ?? [])].find(
-      (dependency) => !visited.has(dependency),
-    ) as string;
+    current = current.dependencies.values().find(isUnvisited);
   }
-  return path.slice(path.indexOf(current));
+  return current ? path.slice(path.indexOf(current)) : path;
 }
 
-function findNeighborDecls(
+/** The values of `definedDecls` whose names are referenced by the types `decl` depends on. */
+function findNeighborDecls<T>(
   decl: TypeDeclElem,
-  relevantIdentifiers: Set<string>,
-): Set<string> {
-  const neighbors: Set<string> = new Set();
-  for (const typeRef of typeRefsOf(decl)) {
-    findReferencedDecls(typeRef, relevantIdentifiers, neighbors);
+  definedDecls: ReadonlyMap<string, T>,
+): Set<T> {
+  const neighbors = new Set<T>();
+  for (const name of declTypeNames(decl)) {
+    const neighbor = definedDecls.get(name);
+    if (neighbor !== undefined) {
+      neighbors.add(neighbor);
+    }
   }
   return neighbors;
 }

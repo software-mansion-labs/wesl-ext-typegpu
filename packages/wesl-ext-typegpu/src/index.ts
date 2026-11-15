@@ -6,8 +6,9 @@ import { findModuleCycle } from './cycles.ts';
 import { ModuleTranslationError } from './errors.ts';
 import {
   type LibraryReference,
-  findOccupiedIdentifiers,
+  generateImportMap,
   generateImportSnippets,
+  moduleLocation,
 } from './imports.ts';
 import {
   libraryModuleOfShaderPath,
@@ -39,7 +40,9 @@ async function emitReflectJs(
   const typeDecls = [...structs, ...aliases];
   const consts = declsOfKind(ast.moduleElem, 'const');
 
-  const importsNamespace = findOccupiedIdentifiers(imports);
+  const location = moduleLocation(moduleName, libraryDirId);
+  const importOfAlias = generateImportMap(imports, location);
+  const importsNamespace = new Set(importOfAlias.keys());
 
   const names = createEmitNames([
     ...importsNamespace,
@@ -75,12 +78,11 @@ async function emitReflectJs(
   const { snippets: importSnippets, libraryReferences } =
     generateImportSnippets(
       translated,
-      imports,
+      importOfAlias,
       importsNamespace,
-      moduleName,
+      location,
       translatedConsts.referencedIdentifiers,
       names,
-      libraryDirId,
       lazyImports,
     );
   await checkLibraryReferences(libraryReferences, api);

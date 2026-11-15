@@ -53,18 +53,16 @@ interface ImportedItem {
 }
 
 /**
- * @param modulePath path of the module being emitted, e.g. `package::folder::main`,
- * or `lygia::math` for a module of a WESL library
- * @param libraryDirId set when emitting a module of a WESL library
+ * @param importOfAlias the import map of the module, see {@link generateImportMap}
+ * @param location the module being emitted, see {@link moduleLocation}
  */
 export function generateImportSnippets(
   declElems: TypeDeclElem[],
-  importElems: ImportElem[],
+  importOfAlias: Map<string, ResolvedPath>,
   importsNamespace: Set<string>,
-  modulePath: string,
+  location: ModuleLocation,
   constReferences: Iterable<string>,
   names: EmitNames,
-  libraryDirId?: string,
   lazyImports: Set<string> = new Set(),
 ): { snippets: string[]; libraryReferences: LibraryReference[] } {
   const { inlinedImports, directImports } = findImportsUsedInStructs(
@@ -73,10 +71,8 @@ export function generateImportSnippets(
     constReferences,
   );
 
-  const location = moduleLocation(modulePath, libraryDirId);
-
   const { importedItems, libraryReferences } = parseImports(
-    importElems,
+    importOfAlias,
     directImports,
     inlinedImports,
     location,
@@ -169,14 +165,13 @@ function findImportsUsedInStructs(
 }
 
 function parseImports(
-  importElems: ImportElem[],
+  importOfAlias: Map<string, ResolvedPath>,
   directImports: Map<string, string>,
   inlinedImports: Map<string, string>,
   location: ModuleLocation,
   names: EmitNames,
   lazyImports: Set<string>,
 ): { importedItems: ImportedItem[]; libraryReferences: LibraryReference[] } {
-  const importOfAlias = generateImportMap(importElems, location);
   const importedItems: ImportedItem[] = [];
   const libraryReferences: LibraryReference[] = [];
 
@@ -252,6 +247,11 @@ export function resolveImportedName(
   return undefined;
 }
 
+/**
+ * @param modulePath path of the module being emitted, e.g. `package::folder::main`,
+ * or `lygia::math` for a module of a WESL library
+ * @param libraryDirId set when emitting a module of a WESL library
+ */
 export function moduleLocation(
   modulePath: string,
   libraryDirId?: string,
@@ -264,29 +264,6 @@ export function moduleLocation(
         packageRoot: [LIBRARY_DIR, root],
         libraryDirId,
       };
-}
-
-/** Returns the identifiers that the import statements bring into scope */
-export function findOccupiedIdentifiers(
-  importElems: ImportElem[],
-): Set<string> {
-  const imports = new Set<string>();
-
-  function traverseImport(importElem: ImportStatement) {
-    const segment = importElem.finalSegment;
-    if (segment.kind === 'import-item') {
-      imports.add(segment.as ?? segment.name);
-    } else {
-      for (const subImport of segment.subtrees) {
-        traverseImport(subImport);
-      }
-    }
-  }
-
-  for (const elem of importElems) {
-    traverseImport(elem.imports);
-  }
-  return imports;
 }
 
 /**
@@ -358,6 +335,7 @@ function toSpecifier(resolved: ResolvedPath, location: ModuleLocation) {
  * Returns an import map from each imported identifier to the full path it refers to.
  * For example, for "import package::folder::file as NestedAlias;" we get entry
  * `"NestedAlias" => { kind: 'local', segments: ['folder', 'file'] }`
+ * Its keys are exactly the identifiers that the import statements bring into scope.
  */
 export function generateImportMap(
   importElems: ImportElem[],
