@@ -1,5 +1,11 @@
-import type { ImportElem, ImportStatement, TypeRefElem } from 'wesl';
+import type {
+  AttributeElem,
+  ImportElem,
+  ImportStatement,
+  TypeRefElem,
+} from 'wesl';
 
+import { forEachReferencedIdentifier } from './expressions.ts';
 import type { TypeDeclElem } from './structs.ts';
 import { asTypeRef } from './types.ts';
 import { assertDefined } from './utils.ts';
@@ -31,10 +37,12 @@ export function generateImportSnippets(
   importElems: ImportElem[],
   importsNamespace: Set<string>,
   modulePath: string,
+  constReferences: Iterable<string> = [],
 ): string[] {
   const { inlinedImports, directImports } = findImportsUsedInStructs(
     declElems,
     importsNamespace,
+    constReferences,
   );
 
   const moduleSegments = modulePath.split('::').slice(1);
@@ -47,6 +55,7 @@ export function generateImportSnippets(
 }
 
 /**
+ * Finds imports used by the declarations and by the identifiers referenced by emitted consts.
  * Returns two sets of strings.
  * `directImports` contains identifiers of imported items, e.g. `struct1`.
  * `inlinedImports` contains names of inlined imports, e.g. `package::file::struct2`
@@ -54,22 +63,39 @@ export function generateImportSnippets(
 function findImportsUsedInStructs(
   declElements: TypeDeclElem[],
   importsNamespace: Set<string>,
+  constReferences: Iterable<string>,
 ): { inlinedImports: Set<string>; directImports: Set<string> } {
   const directImports = new Set<string>();
   const inlinedImports = new Set<string>();
 
-  function findImportsUsedInType(typeRef: TypeRefElem) {
-    const name = typeRef.name.originalName;
+  function addName(name: string) {
     if (name.includes('::')) {
       inlinedImports.add(name);
     }
     if (importsNamespace.has(name)) {
       directImports.add(name);
     }
+  }
+
+  function findImportsUsedInType(typeRef: TypeRefElem) {
+    addName(typeRef.name.originalName);
     for (const param of typeRef.templateParams ?? []) {
       const subtype = asTypeRef(param);
       if (subtype) {
         findImportsUsedInType(subtype);
+      } else {
+        // e.g. the length of an array
+        forEachReferencedIdentifier(param, addName);
+      }
+    }
+  }
+
+  function findImportsUsedInAttributes(attributes: AttributeElem[] = []) {
+    for (const { attribute } of attributes) {
+      if (attribute.kind === '@attribute') {
+        for (const param of attribute.params ?? []) {
+          forEachReferencedIdentifier(param.expression, addName);
+        }
       }
     }
   }
@@ -78,10 +104,16 @@ function findImportsUsedInStructs(
     if (decl.kind === 'alias') {
       findImportsUsedInType(decl.typeRef);
     } else {
+      findImportsUsedInAttributes(decl.attributes);
       for (const member of decl.members) {
         findImportsUsedInType(member.typeRef);
+        findImportsUsedInAttributes(member.attributes);
       }
     }
+  }
+
+  for (const name of constReferences) {
+    addName(name);
   }
 
   return { inlinedImports, directImports };

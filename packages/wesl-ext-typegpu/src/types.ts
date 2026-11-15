@@ -1,9 +1,6 @@
-import type {
-  AttributeElem,
-  ExpressionElem,
-  TypeRefElem,
-  TypeTemplateParameter,
-} from 'wesl';
+import type { AttributeElem, TypeRefElem, TypeTemplateParameter } from 'wesl';
+
+import { type ExpressionContext, translateExpression } from './expressions.ts';
 
 export const VariableSizedArrayParam = '__arrayLength';
 
@@ -66,7 +63,7 @@ export function asTypeRef(
 export function generateType(
   typeRef: TypeRefElem,
   importsNamespace: Set<string>,
-  src: string,
+  ctx: ExpressionContext,
 ): string {
   const typeName = typeRef.name.originalName;
 
@@ -80,11 +77,11 @@ export function generateType(
     case 'vec4':
       return parseVectorType(typeRef);
     case 'array':
-      return parseArrayType(typeRef, importsNamespace, src);
+      return parseArrayType(typeRef, importsNamespace, ctx);
     case 'atomic':
-      return parseAtomicType(typeRef, importsNamespace, src);
+      return parseAtomicType(typeRef, importsNamespace, ctx);
     case 'ptr':
-      return parsePtrType(typeRef, importsNamespace, src);
+      return parsePtrType(typeRef, importsNamespace, ctx);
     default:
       if (matrixTypeRegex.test(typeName)) {
         return parseMatrixType(typeRef);
@@ -139,16 +136,16 @@ function resolveMatrixSchema(
 function parseArrayType(
   typeRef: TypeRefElem,
   identifiersNamespace: Set<string>,
-  src: string,
+  ctx: ExpressionContext,
 ): string {
   const params = typeRef.templateParams ?? [];
   const elementType = asTypeRef(params[0]);
   if (!([1, 2].includes(params.length) && elementType)) {
     throw new Error('Unsupported array parameters!');
   }
-  const subType = generateType(elementType, identifiersNamespace, src);
+  const subType = generateType(elementType, identifiersNamespace, ctx);
   if (params[1]) {
-    const length = extractText(params[1], src);
+    const length = translateExpression(params[1], ctx);
     return `d.arrayOf(${subType}, ${length})`;
   }
   return `d.arrayOf(${subType}, ${VariableSizedArrayParam})`;
@@ -157,21 +154,21 @@ function parseArrayType(
 function parseAtomicType(
   typeRef: TypeRefElem,
   identifiersNamespace: Set<string>,
-  src: string,
+  ctx: ExpressionContext,
 ): string {
   const params = typeRef.templateParams ?? [];
   const innerType = asTypeRef(params[0]);
   if (!(params.length === 1 && innerType)) {
     throw new Error('Unsupported atomic parameters!');
   }
-  const subType = generateType(innerType, identifiersNamespace, src);
+  const subType = generateType(innerType, identifiersNamespace, ctx);
   return `d.atomic(${subType})`;
 }
 
 function parsePtrType(
   typeRef: TypeRefElem,
   identifiersNamespace: Set<string>,
-  src: string,
+  ctx: ExpressionContext,
 ): string {
   const params = typeRef.templateParams ?? [];
   const addressSpaceRef = asTypeRef(params[0]);
@@ -188,7 +185,7 @@ function parsePtrType(
     throw new Error('Invalid ptr address space!');
   }
   const ptrName = addressSpaceMap[addressSpace];
-  const subType = generateType(innerType, identifiersNamespace, src);
+  const subType = generateType(innerType, identifiersNamespace, ctx);
   const accessMode = accessModeRef?.name.originalName.replaceAll('_', '-');
 
   // all pointers accept exactly one argument except for ptrStorage
@@ -236,7 +233,7 @@ const builtinNames = new Set([
 export function wrapInAttributes(
   type: string,
   attributes: AttributeElem[] | undefined,
-  src: string,
+  ctx: ExpressionContext,
 ): string {
   if (!attributes) {
     return type;
@@ -252,7 +249,7 @@ export function wrapInAttributes(
     throw new Error('Multiple @builtin attributes on a single declaration!');
   }
   const base =
-    builtins.length > 0 ? wrapInAttribute(type, builtins[0], src) : type;
+    builtins.length > 0 ? wrapInAttribute(type, builtins[0], ctx) : type;
 
   // Wrapping from the last attribute outwards keeps the first attribute as the outermost call,
   // so the nesting reads in source order. TypeGPU prepends each attribute it applies, so this
@@ -260,7 +257,7 @@ export function wrapInAttributes(
   return attributes
     .filter((attribute) => attribute.attribute.kind !== '@builtin')
     .reduceRight(
-      (acc, attribute) => wrapInAttribute(acc, attribute, src),
+      (acc, attribute) => wrapInAttribute(acc, attribute, ctx),
       base,
     );
 }
@@ -268,7 +265,7 @@ export function wrapInAttributes(
 function wrapInAttribute(
   acc: string,
   attribute: AttributeElem,
-  src: string,
+  ctx: ExpressionContext,
 ): string {
   switch (attribute.attribute.kind) {
     case '@attribute': {
@@ -278,7 +275,7 @@ function wrapInAttribute(
         throw new Error(`Attribute @${name} is not supported by TypeGPU!`);
       }
       const args = attribute.attribute.params
-        ?.map((param) => extractText(param.expression, src))
+        ?.map((param) => translateExpression(param.expression, ctx))
         .join(', ');
       return `d.${tgpuName}(${args ? `${args}, ` : ''}${acc})`;
     }
@@ -314,8 +311,4 @@ function wrapInAttribute(
 
 function snakeToCamel(name: string): string {
   return name.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
-}
-
-function extractText(element: ExpressionElem, src: string): string {
-  return src.substring(element.start, element.end).replaceAll('_', '-');
 }
