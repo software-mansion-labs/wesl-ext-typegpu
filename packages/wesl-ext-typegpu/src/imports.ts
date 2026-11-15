@@ -5,6 +5,7 @@ import type {
   TypeRefElem,
 } from 'wesl';
 
+import { asTypeRef } from './types.ts';
 import { assertDefined } from './utils.ts';
 
 interface ImportInfo {
@@ -48,8 +49,9 @@ function findImportsUsedInStructs(
     if (importsNamespace.has(name)) {
       directImports.add(name);
     }
-    for (const subtype of typeRef.templateParams ?? []) {
-      if (subtype.kind === 'type') {
+    for (const param of typeRef.templateParams ?? []) {
+      const subtype = asTypeRef(param);
+      if (subtype) {
         findImportsUsedInType(subtype);
       }
     }

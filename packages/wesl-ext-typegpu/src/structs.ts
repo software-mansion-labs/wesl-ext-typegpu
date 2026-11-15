@@ -4,6 +4,7 @@ import type { StructElem, StructMemberElem, TypeRefElem } from 'wesl';
 import { Queue } from './queue.ts';
 import {
   VariableSizedArrayParam,
+  asTypeRef,
   generateType,
   wrapInAttributes,
 } from './types.ts';
@@ -95,8 +96,9 @@ function findNeighborStructs(
       neighbors.add(name);
     }
     for (const elem of type.templateParams ?? []) {
-      if ('kind' in elem && elem.kind === 'type') {
-        findTypeReferences(elem);
+      const subtype = asTypeRef(elem);
+      if (subtype) {
+        findTypeReferences(subtype);
       }
     }
   }
@@ -112,12 +114,16 @@ export function generateStruct(
   nonTgpuIdentifiers: Set<string>,
 ): string {
   const name = struct.name.ident.originalName;
+  const src = struct.name.srcModule.src;
   const fieldsCode = genObjectFromRawEntries(
-    struct.members.map((member) => generateMember(member, nonTgpuIdentifiers)),
+    struct.members.map((member) =>
+      generateMember(member, nonTgpuIdentifiers, src),
+    ),
   );
   let structDefinition = wrapInAttributes(
     `d.struct(${fieldsCode}).$name(${genString(name)})`,
     struct.attributes,
+    src,
   );
   if (isVariableLength(struct)) {
     structDefinition = `(${VariableSizedArrayParam} => ${structDefinition})`;
@@ -128,12 +134,14 @@ export function generateStruct(
 function generateMember(
   member: StructMemberElem,
   nonTgpuIdentifiers: Set<string>,
+  src: string,
 ): [string, string] {
   return [
     member.name.name,
     wrapInAttributes(
-      generateType(member.typeRef, nonTgpuIdentifiers),
+      generateType(member.typeRef, nonTgpuIdentifiers, src),
       member.attributes,
+      src,
     ),
   ];
 }

@@ -1,4 +1,9 @@
-import { type ImportElem, type ImportStatement, noSuffix } from 'wesl';
+import {
+  type ImportElem,
+  type ImportStatement,
+  declsOfKind,
+  fileToModulePath,
+} from 'wesl';
 import type { PluginExtensionApi } from 'wesl-plugin';
 
 import { generateImportSnippets } from './imports.ts';
@@ -17,17 +22,16 @@ async function emitReflectJs(
   api: PluginExtensionApi,
 ): Promise<string> {
   const rootModule = await api.weslMain(baseId);
-  const rootModuleName = noSuffix(rootModule);
-  const moduleName = `./${rootModuleName}`
-    .replaceAll('/', '::')
-    .replace('.', 'package');
+  const moduleName = fileToModulePath(rootModule, 'package', false);
 
   const registry = await api.weslRegistry();
+  const ast = registry.resolveModule(moduleName);
+  if (!ast) {
+    throw new Error(`Unable to resolve WESL module '${moduleName}'!`);
+  }
 
-  const abstractElements = registry.modules[moduleName].moduleElem.contents;
-
-  const imports = abstractElements.filter((e) => e.kind === 'import');
-  const structs = abstractElements.filter((e) => e.kind === 'struct');
+  const imports = declsOfKind(ast.moduleElem, 'import');
+  const structs = declsOfKind(ast.moduleElem, 'struct');
 
   const importsNamespace = findOccupiedIdentifiers(imports);
 
