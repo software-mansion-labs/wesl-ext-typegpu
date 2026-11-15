@@ -10,13 +10,9 @@ import {
   type ExpressionContext,
   UntranslatableExpressionError,
 } from './expressions.ts';
+import { exportBinding } from './names.ts';
 import { Queue } from './queue.ts';
-import {
-  VariableSizedArrayParam,
-  asTypeRef,
-  generateType,
-  wrapInAttributes,
-} from './types.ts';
+import { asTypeRef, generateType, wrapInAttributes } from './types.ts';
 
 /** A module-level declaration that is emitted as an exported TypeGPU schema. */
 export type TypeDeclElem = StructElem | AliasElem;
@@ -28,9 +24,9 @@ export function generateStructSnippets(
 ): string[] {
   const sortedDecls = sortDecls(declElems);
 
-  // We need to know which type identifiers are in typegpu/std and need to be prepended with 'd.'.
+  // We need to know which type identifiers are in typegpu/std and need to be prepended with the `typegpu/data` namespace.
   // Our approach is to find all type identifiers in the namespace introduced by imports, defined structs
-  // and defined aliases, and to prepend everything else (that is not an inlined import) with 'd.'.
+  // and defined aliases, and to prepend everything else (that is not an inlined import) with it.
   const nonTgpuIdentifiers: Set<string> = new Set(
     sortedDecls.map(declName),
   ).union(importsNamespace);
@@ -163,9 +159,9 @@ export function generateAlias(
   );
   // An alias of another runtime-sized alias is already a function, so it's exported as is.
   if (isRuntimeSizedArray(alias.typeRef)) {
-    type = `(${VariableSizedArrayParam} => ${type})`;
+    type = `(${ctx.names.arrayLength} => ${type})`;
   }
-  return `export const ${name} = ${type};`;
+  return exportBinding(ctx.names, name, type);
 }
 
 export function generateStruct(
@@ -186,15 +182,15 @@ export function generateStruct(
   );
   let structDefinition = withExpressionContext(`struct '${name}'`, () =>
     wrapInAttributes(
-      `d.struct(${fieldsCode}).$name(${genString(name)})`,
+      `${ctx.names.data}.struct(${fieldsCode}).$name(${genString(name)})`,
       struct.attributes,
       ctx,
     ),
   );
   if (isVariableLength(struct, runtimeSizedAliases)) {
-    structDefinition = `(${VariableSizedArrayParam} => ${structDefinition})`;
+    structDefinition = `(${ctx.names.arrayLength} => ${structDefinition})`;
   }
-  return `export const ${name} = ${structDefinition};`;
+  return exportBinding(ctx.names, name, structDefinition);
 }
 
 function generateMember(
@@ -206,7 +202,7 @@ function generateMember(
   let type = generateType(member.typeRef, nonTgpuIdentifiers, ctx);
   // Runtime-sized aliases are functions of the array length, so we pass it on.
   if (runtimeSizedAliases.has(member.typeRef.name.originalName)) {
-    type = `${type}(${VariableSizedArrayParam})`;
+    type = `${type}(${ctx.names.arrayLength})`;
   }
   return [member.name.name, wrapInAttributes(type, member.attributes, ctx)];
 }

@@ -2,8 +2,6 @@ import type { AttributeElem, TypeRefElem, TypeTemplateParameter } from 'wesl';
 
 import { type ExpressionContext, translateExpression } from './expressions.ts';
 
-export const VariableSizedArrayParam = '__arrayLength';
-
 const vecResolveMap: Record<string, string> = {
   bool: 'b',
   AbstractInt: 'i',
@@ -67,7 +65,10 @@ export function generateType(
 ): string {
   const typeName = typeRef.name.originalName;
 
-  if (importsNamespace.has(typeName) || typeName.includes('::')) {
+  if (importsNamespace.has(typeName)) {
+    return ctx.names.local(typeName);
+  }
+  if (typeName.includes('::')) {
     return typeName.replaceAll('::', '$');
   }
 
@@ -75,7 +76,7 @@ export function generateType(
     case 'vec2': // Fallthrough
     case 'vec3': // Fallthrough
     case 'vec4':
-      return parseVectorType(typeRef);
+      return parseVectorType(typeRef, ctx);
     case 'array':
       return parseArrayType(typeRef, importsNamespace, ctx);
     case 'atomic':
@@ -84,16 +85,16 @@ export function generateType(
       return parsePtrType(typeRef, importsNamespace, ctx);
     default:
       if (matrixTypeRegex.test(typeName)) {
-        return parseMatrixType(typeRef);
+        return parseMatrixType(typeRef, ctx);
       }
       if (matrixShorthandRegex.test(typeName)) {
-        return resolveMatrixSchema(typeName);
+        return resolveMatrixSchema(ctx, typeName);
       }
-      return `d.${typeName}`;
+      return `${ctx.names.data}.${typeName}`;
   }
 }
 
-function parseVectorType(typeRef: TypeRefElem): string {
+function parseVectorType(typeRef: TypeRefElem, ctx: ExpressionContext): string {
   const params = typeRef.templateParams ?? [];
   const componentType = asTypeRef(params[0])?.name.originalName;
   if (
@@ -101,10 +102,10 @@ function parseVectorType(typeRef: TypeRefElem): string {
   ) {
     throw new Error('Unsupported vector parameters!');
   }
-  return `d.${typeRef.name.originalName}${vecResolveMap[componentType]}`;
+  return `${ctx.names.data}.${typeRef.name.originalName}${vecResolveMap[componentType]}`;
 }
 
-function parseMatrixType(typeRef: TypeRefElem): string {
+function parseMatrixType(typeRef: TypeRefElem, ctx: ExpressionContext): string {
   const typeName = typeRef.name.originalName;
   const params = typeRef.templateParams ?? [];
   const componentType = asTypeRef(params[0])?.name.originalName;
@@ -116,12 +117,14 @@ function parseMatrixType(typeRef: TypeRefElem): string {
     );
   }
   return resolveMatrixSchema(
+    ctx,
     `${typeName}${matResolveMap[componentType]}`,
     `${typeName}<${componentType}>`,
   );
 }
 
 function resolveMatrixSchema(
+  ctx: ExpressionContext,
   schemaName: string,
   wgslName = schemaName,
 ): string {
@@ -130,7 +133,7 @@ function resolveMatrixSchema(
       `Matrix type '${wgslName}' is not supported by TypeGPU, supported matrix types are: ${[...supportedMatrices].join(', ')}.`,
     );
   }
-  return `d.${schemaName}`;
+  return `${ctx.names.data}.${schemaName}`;
 }
 
 function parseArrayType(
@@ -146,9 +149,9 @@ function parseArrayType(
   const subType = generateType(elementType, identifiersNamespace, ctx);
   if (params[1]) {
     const length = translateExpression(params[1], ctx);
-    return `d.arrayOf(${subType}, ${length})`;
+    return `${ctx.names.data}.arrayOf(${subType}, ${length})`;
   }
-  return `d.arrayOf(${subType}, ${VariableSizedArrayParam})`;
+  return `${ctx.names.data}.arrayOf(${subType}, ${ctx.names.arrayLength})`;
 }
 
 function parseAtomicType(
@@ -162,7 +165,7 @@ function parseAtomicType(
     throw new Error('Unsupported atomic parameters!');
   }
   const subType = generateType(innerType, identifiersNamespace, ctx);
-  return `d.atomic(${subType})`;
+  return `${ctx.names.data}.atomic(${subType})`;
 }
 
 function parsePtrType(
@@ -189,7 +192,7 @@ function parsePtrType(
   const accessMode = accessModeRef?.name.originalName.replaceAll('_', '-');
 
   // all pointers accept exactly one argument except for ptrStorage
-  return `d.${ptrName}(${subType}${ptrName === 'ptrStorage' && accessMode ? `, "${accessMode}"` : ''})`;
+  return `${ctx.names.data}.${ptrName}(${subType}${ptrName === 'ptrStorage' && accessMode ? `, "${accessMode}"` : ''})`;
 }
 
 /**
@@ -205,7 +208,7 @@ const attributeMap = new Map([
 ]);
 
 /**
- * Builtin values (written as `@builtin(name)` in WGSL) available on `d.builtin` in `typegpu/data`.
+ * Builtin values (written as `@builtin(name)` in WGSL) available on `${ctx.names.data}.builtin` in `typegpu/data`.
  */
 const builtinNames = new Set([
   'clip_distances',
@@ -239,7 +242,7 @@ export function wrapInAttributes(
     return type;
   }
 
-  // `d.builtin.*` values already carry their data type, so a builtin replaces the base type
+  // `${ctx.names.data}.builtin.*` values already carry their data type, so a builtin replaces the base type
   // instead of wrapping it. It is applied first so that the other attributes wrap it no matter
   // where `@builtin` appears among them.
   const builtins = attributes.filter(
@@ -277,7 +280,7 @@ function wrapInAttribute(
       const args = attribute.attribute.params
         ?.map((param) => translateExpression(param.expression, ctx))
         .join(', ');
-      return `d.${tgpuName}(${args ? `${args}, ` : ''}${acc})`;
+      return `${ctx.names.data}.${tgpuName}(${args ? `${args}, ` : ''}${acc})`;
     }
     case '@interpolate': {
       if (
@@ -291,14 +294,14 @@ function wrapInAttribute(
       const param = attribute.attribute.params
         .map((elem) => elem.name)
         .join(', ');
-      return `d.interpolate("${param}", ${acc})`;
+      return `${ctx.names.data}.interpolate("${param}", ${acc})`;
     }
     case '@builtin': {
       const { name } = attribute.attribute.param;
       if (!builtinNames.has(name)) {
         throw new Error(`Builtin value ${name} is not supported by TypeGPU!`);
       }
-      return `d.builtin.${snakeToCamel(name)}`;
+      return `${ctx.names.data}.builtin.${snakeToCamel(name)}`;
     }
     case '@diagnostic':
       throw new Error('Diagnostic attributes are not supported by TGSL!');
