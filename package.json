@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "pnpm run --filter example-app dev",
     "fix": "oxlint --fix && oxfmt",
-    "test:style": "oxlint && oxfmt --check"
+    "test:style": "oxlint && oxfmt --check",
+    "test": "pnpm run --recursive --if-present test"
   },
   "devDependencies": {
     "arktype": "^2.1.9",
