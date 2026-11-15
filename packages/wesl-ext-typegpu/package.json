@@ -82,6 +82,7 @@
     "wesl-plugin": "^0.6.81"
   },
   "dependencies": {
+    "import-meta-resolve": "^4.2.0",
     "knitwork": "^1.2.0"
   }
 }

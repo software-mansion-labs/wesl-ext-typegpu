@@ -1,8 +1,10 @@
-import { posix } from 'node:path';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, posix } from 'node:path';
 
 import { parseSync } from 'vite';
-import { describe, expect, it } from 'vitest';
-import { link, RecordResolver } from 'wesl';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { link, RecordResolver, type WeslBundle } from 'wesl';
 import type { PluginExtensionApi } from 'wesl-plugin';
 
 import { typegpuExtension } from '../src/index.ts';
@@ -14,11 +16,16 @@ import { typegpuExtension } from '../src/index.ts';
 async function emit(
   weslSrc: Record<string, string>,
   modulePath = 'main.wesl',
+  projectDir = '/nonexistent',
 ): Promise<string> {
   const registry = new RecordResolver(weslSrc);
   const api = {
     weslMain: async () => modulePath,
     weslRegistry: async () => registry,
+    weslToml: async () =>
+      ({ tomlDir: projectDir }) as Awaited<
+        ReturnType<PluginExtensionApi['weslToml']>
+      >,
   } as Partial<PluginExtensionApi> as PluginExtensionApi;
 
   return typegpuExtension.emitFn(modulePath, api);
@@ -1136,4 +1143,255 @@ it('throws when the module cannot be resolved', async () => {
   await expect(emit({}, 'missing.wesl')).rejects.toThrow(
     /Unable to resolve WESL module/,
   );
+});
+
+describe('library imports', () => {
+  const mathModule = `
+    import package::util::Inner;
+    import other_lib::Remote;
+
+    struct Foo { a: vec3f }
+    struct Bar { inner: Inner, remote: Remote }
+    alias FooAlias = Foo;
+    const COUNT = 4;
+  `;
+  const lygia: WeslBundle = {
+    name: 'lygia',
+    edition: 'unstable_2025_1',
+    modules: {
+      'math.wesl': mathModule,
+      'util.wesl': 'struct Inner { b: f32 }',
+    },
+  };
+  const otherLib: WeslBundle = {
+    name: 'other_lib',
+    edition: 'unstable_2025_1',
+    modules: { 'lib.wesl': 'struct Remote { c: u32 }' },
+  };
+  const scopedLib: WeslBundle = {
+    name: 'scope__my_lib',
+    edition: 'unstable_2025_1',
+    modules: { 'shapes.wesl': 'struct Circle { r: f32 }' },
+  };
+
+  /** A project directory with the bundles installed as npm packages, the way wesl-packager publishes them. */
+  let projectDir: string;
+  beforeAll(() => {
+    projectDir = mkdtempSync(join(tmpdir(), 'wesl-ext-typegpu-'));
+    const install = (npmName: string, bundle: WeslBundle) => {
+      const dir = join(projectDir, 'node_modules', npmName);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, 'package.json'),
+        JSON.stringify({
+          name: npmName,
+          type: 'module',
+          exports: { '.': { import: './weslBundle.js' } },
+        }),
+      );
+      writeFileSync(
+        join(dir, 'weslBundle.js'),
+        `export default ${JSON.stringify(bundle)};`,
+      );
+    };
+    install('lygia', lygia);
+    install('other-lib', otherLib);
+    install('@scope/my-lib', scopedLib);
+  });
+
+  it('imports library structs from their virtual module path', async () => {
+    const code = await emit(
+      {
+        'folder/main.wesl': `
+          import lygia::math::Foo;
+          import scope__my_lib::shapes;
+
+          struct X { a: Foo, b: lygia::math::Bar, c: shapes::Circle }
+        `,
+      },
+      'folder/main.wesl',
+      projectDir,
+    );
+    expect(code).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { Bar as lygia$math$Bar, Foo } from '../__wesl_lib__/lygia/math.wesl?typegpu';
+      import { Circle as shapes$Circle } from '../__wesl_lib__/scope__my_lib/shapes.wesl?typegpu';
+      export const X = d.struct({
+        a: Foo,
+        b: lygia$math$Bar,
+        c: shapes$Circle
+      }).$name("X");"
+    `);
+  });
+
+  it('emits the schemas of a library module', async () => {
+    // the WESL linker agrees on what the library paths point to
+    await expect(
+      link({
+        weslSrc: {
+          'main.wesl': `
+            import lygia::math::Bar;
+            @compute @workgroup_size(1) fn main() { var b: Bar; }
+          `,
+        },
+        rootModuleName: 'main.wesl',
+        libs: [lygia, otherLib],
+      }),
+    ).resolves.toBeDefined();
+
+    const code = await emit(
+      {},
+      '/project/shaders/__wesl_lib__/lygia/math.wesl',
+      projectDir,
+    );
+    expect(code).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { Inner } from '^^/project/shaders/__wesl_lib__/lygia/util.wesl?typegpu';
+      import { Remote } from '^^/project/shaders/__wesl_lib__/other_lib.wesl?typegpu';
+      export const COUNT = 4;
+      export const Foo = d.struct({
+        a: d.vec3f
+      }).$name("Foo");
+      export const Bar = d.struct({
+        inner: Inner,
+        remote: Remote
+      }).$name("Bar");
+      export const FooAlias = Foo;"
+    `);
+  });
+
+  it('emits the root module of a library', async () => {
+    const code = await emit(
+      {},
+      '/project/shaders/__wesl_lib__/other_lib.wesl',
+      projectDir,
+    );
+    expect(code).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const Remote = d.struct({
+        c: d.u32
+      }).$name("Remote");"
+    `);
+  });
+
+  it('imports other library modules by their resolved id, wherever the library module was loaded from', async () => {
+    // wesl-plugin hands extensions the path with its '^^' resolution prefix stripped once
+    const code = await emit(
+      {},
+      '^^/project/shaders/__wesl_lib__/lygia/math.wesl',
+      projectDir,
+    );
+    expect(code).toContain(
+      "from '^^/project/shaders/__wesl_lib__/lygia/util.wesl?typegpu'",
+    );
+  });
+
+  it('names the struct member when the library is missing', async () => {
+    await expect(
+      emit(
+        {
+          'main.wesl': `
+            import missing_lib::math::Foo;
+            struct X { a: Foo }
+          `,
+        },
+        'main.wesl',
+        projectDir,
+      ),
+    ).rejects.toThrow(
+      "Unable to find the WESL library for module 'missing_lib::math' (used by struct member 'X.a'). Is the npm package 'missing_lib' installed?",
+    );
+  });
+
+  it('names the struct member when the library has no such module', async () => {
+    await expect(
+      emit(
+        { 'main.wesl': 'struct X { a: lygia::nope::Foo }' },
+        'main.wesl',
+        projectDir,
+      ),
+    ).rejects.toThrow(
+      "WESL library 'lygia' has no module 'lygia::nope' (used by struct member 'X.a')",
+    );
+  });
+
+  it('names the struct member when the library module has no such struct', async () => {
+    await expect(
+      emit(
+        { 'main.wesl': 'struct X { a: lygia::math::Nope }' },
+        'main.wesl',
+        projectDir,
+      ),
+    ).rejects.toThrow(
+      "WESL library module 'lygia::math' has no struct, alias or const 'Nope' (used by struct member 'X.a')",
+    );
+  });
+
+  it('imports library consts used by array lengths', async () => {
+    const code = await emit(
+      {
+        'main.wesl': `
+          import lygia::math;
+          struct X { a: array<f32, math::COUNT>, b: array<f32, lygia::math::COUNT> }
+        `,
+      },
+      'main.wesl',
+      projectDir,
+    );
+    expect(code).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { COUNT as lygia$math$COUNT, COUNT as math$COUNT } from './__wesl_lib__/lygia/math.wesl?typegpu';
+      export const X = d.struct({
+        a: d.arrayOf(d.f32, math$COUNT),
+        b: d.arrayOf(d.f32, lygia$math$COUNT)
+      }).$name("X");"
+    `);
+  });
+
+  it('names the struct member when it uses a missing library const', async () => {
+    await expect(
+      emit(
+        { 'main.wesl': 'struct X { a: array<f32, lygia::math::NOPE> }' },
+        'main.wesl',
+        projectDir,
+      ),
+    ).rejects.toThrow(
+      "WESL library module 'lygia::math' has no struct, alias or const 'NOPE' (used by struct member 'X.a')",
+    );
+  });
+
+  it('names the alias when it uses a missing library item', async () => {
+    await expect(
+      emit(
+        { 'main.wesl': 'alias A = lygia::math::Nope;' },
+        'main.wesl',
+        projectDir,
+      ),
+    ).rejects.toThrow(
+      "WESL library module 'lygia::math' has no struct, alias or const 'Nope' (used by alias 'A')",
+    );
+  });
+
+  it('imports library types used by aliases, including library aliases', async () => {
+    const code = await emit(
+      {
+        'main.wesl': `
+          import lygia::math::FooAlias;
+          alias A = lygia::math::Bar;
+          struct X { a: FooAlias, b: A }
+        `,
+      },
+      'main.wesl',
+      projectDir,
+    );
+    expect(code).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { Bar as lygia$math$Bar, FooAlias } from './__wesl_lib__/lygia/math.wesl?typegpu';
+      export const A = lygia$math$Bar;
+      export const X = d.struct({
+        a: FooAlias,
+        b: A
+      }).$name("X");"
+    `);
+  });
 });
