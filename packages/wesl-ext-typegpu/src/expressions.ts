@@ -1,14 +1,16 @@
 import type { ExpressionElem, RefIdentElem, TypeRefElem } from 'wesl';
 
+import { type Span, TranslationError } from './errors.ts';
 import type { EmitNames } from './names.ts';
 
 /**
  * Thrown when a WGSL expression has no JS equivalent we can emit.
- * Callers add the context (struct, member, const) the expression came from.
+ * `translateExpression` attaches the innermost expression it failed on, and callers add the context
+ * (struct, member, const) the expression came from.
  */
-export class UntranslatableExpressionError extends Error {
-  constructor(message: string) {
-    super(message);
+export class UntranslatableExpressionError extends TranslationError {
+  constructor(message: string, span?: Span) {
+    super(message, span);
     this.name = 'UntranslatableExpressionError';
   }
 }
@@ -47,6 +49,20 @@ const unaryOperators = new Set(['-', '~']);
  * `/` is emitted as truncating integer division.
  */
 export function translateExpression(
+  expr: ExpressionElem,
+  ctx: ExpressionContext,
+): string {
+  try {
+    return translateExpressionUnlocated(expr, ctx);
+  } catch (error) {
+    if (error instanceof TranslationError && !error.span) {
+      error.span = expr;
+    }
+    throw error;
+  }
+}
+
+function translateExpressionUnlocated(
   expr: ExpressionElem,
   ctx: ExpressionContext,
 ): string {

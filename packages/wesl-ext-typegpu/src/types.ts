@@ -1,5 +1,6 @@
 import type { AttributeElem, TypeRefElem, TypeTemplateParameter } from 'wesl';
 
+import { TranslationError } from './errors.ts';
 import { type ExpressionContext, translateExpression } from './expressions.ts';
 
 const vecResolveMap: Record<string, string> = {
@@ -88,7 +89,7 @@ export function generateType(
         return parseMatrixType(typeRef, ctx);
       }
       if (matrixShorthandRegex.test(typeName)) {
-        return resolveMatrixSchema(ctx, typeName);
+        return resolveMatrixSchema(ctx, typeRef, typeName);
       }
       return `${ctx.names.data}.${typeName}`;
   }
@@ -100,7 +101,7 @@ function parseVectorType(typeRef: TypeRefElem, ctx: ExpressionContext): string {
   if (
     !(params.length === 1 && componentType && componentType in vecResolveMap)
   ) {
-    throw new Error('Unsupported vector parameters!');
+    throw new TranslationError('Unsupported vector parameters', typeRef);
   }
   return `${ctx.names.data}.${typeRef.name.originalName}${vecResolveMap[componentType]}`;
 }
@@ -112,12 +113,14 @@ function parseMatrixType(typeRef: TypeRefElem, ctx: ExpressionContext): string {
   if (
     !(params.length === 1 && componentType && componentType in matResolveMap)
   ) {
-    throw new Error(
-      `Unsupported matrix parameters for '${typeName}', expected a single f32 or f16 component type!`,
+    throw new TranslationError(
+      `Unsupported matrix parameters for '${typeName}', expected a single f32 or f16 component type`,
+      typeRef,
     );
   }
   return resolveMatrixSchema(
     ctx,
+    typeRef,
     `${typeName}${matResolveMap[componentType]}`,
     `${typeName}<${componentType}>`,
   );
@@ -125,12 +128,14 @@ function parseMatrixType(typeRef: TypeRefElem, ctx: ExpressionContext): string {
 
 function resolveMatrixSchema(
   ctx: ExpressionContext,
+  typeRef: TypeRefElem,
   schemaName: string,
   wgslName = schemaName,
 ): string {
   if (!supportedMatrices.has(schemaName)) {
-    throw new Error(
-      `Matrix type '${wgslName}' is not supported by TypeGPU, supported matrix types are: ${[...supportedMatrices].join(', ')}.`,
+    throw new TranslationError(
+      `Matrix type '${wgslName}' is not supported by TypeGPU, supported matrix types are: ${[...supportedMatrices].join(', ')}`,
+      typeRef,
     );
   }
   return `${ctx.names.data}.${schemaName}`;
@@ -144,7 +149,7 @@ function parseArrayType(
   const params = typeRef.templateParams ?? [];
   const elementType = asTypeRef(params[0]);
   if (!([1, 2].includes(params.length) && elementType)) {
-    throw new Error('Unsupported array parameters!');
+    throw new TranslationError('Unsupported array parameters', typeRef);
   }
   const subType = generateType(elementType, identifiersNamespace, ctx);
   if (params[1]) {
@@ -162,7 +167,7 @@ function parseAtomicType(
   const params = typeRef.templateParams ?? [];
   const innerType = asTypeRef(params[0]);
   if (!(params.length === 1 && innerType)) {
-    throw new Error('Unsupported atomic parameters!');
+    throw new TranslationError('Unsupported atomic parameters', typeRef);
   }
   const subType = generateType(innerType, identifiersNamespace, ctx);
   return `${ctx.names.data}.atomic(${subType})`;
@@ -177,15 +182,15 @@ function parsePtrType(
   const addressSpaceRef = asTypeRef(params[0]);
   const innerType = asTypeRef(params[1]);
   if (!([2, 3].includes(params.length) && addressSpaceRef && innerType)) {
-    throw new Error('Unsupported ptr parameters!');
+    throw new TranslationError('Unsupported ptr parameters', typeRef);
   }
   const accessModeRef = asTypeRef(params[2]);
   if (params[2] && !accessModeRef) {
-    throw new Error('Invalid ptr memory access mode!');
+    throw new TranslationError('Invalid ptr memory access mode', params[2]);
   }
   const addressSpace = addressSpaceRef.name.originalName;
   if (!(addressSpace in addressSpaceMap)) {
-    throw new Error('Invalid ptr address space!');
+    throw new TranslationError('Invalid ptr address space', addressSpaceRef);
   }
   const ptrName = addressSpaceMap[addressSpace];
   const subType = generateType(innerType, identifiersNamespace, ctx);
@@ -249,7 +254,10 @@ export function wrapInAttributes(
     (attribute) => attribute.attribute.kind === '@builtin',
   );
   if (builtins.length > 1) {
-    throw new Error('Multiple @builtin attributes on a single declaration!');
+    throw new TranslationError(
+      'Multiple @builtin attributes on a single declaration',
+      builtins[1],
+    );
   }
   const base =
     builtins.length > 0 ? wrapInAttribute(type, builtins[0], ctx) : type;
@@ -275,7 +283,10 @@ function wrapInAttribute(
       const { name } = attribute.attribute;
       const tgpuName = attributeMap.get(name);
       if (!tgpuName) {
-        throw new Error(`Attribute @${name} is not supported by TypeGPU!`);
+        throw new TranslationError(
+          `Attribute @${name} is not supported by TypeGPU`,
+          attribute,
+        );
       }
       const args = attribute.attribute.params
         ?.map((param) => translateExpression(param.expression, ctx))
@@ -289,7 +300,10 @@ function wrapInAttribute(
           [1, 2].includes(attribute.attribute.params.length)
         )
       ) {
-        throw new Error('Invalid interpolation parameters!');
+        throw new TranslationError(
+          'Invalid interpolation parameters',
+          attribute,
+        );
       }
       const param = attribute.attribute.params
         .map((elem) => elem.name)
@@ -299,16 +313,25 @@ function wrapInAttribute(
     case '@builtin': {
       const { name } = attribute.attribute.param;
       if (!builtinNames.has(name)) {
-        throw new Error(`Builtin value ${name} is not supported by TypeGPU!`);
+        throw new TranslationError(
+          `Builtin value ${name} is not supported by TypeGPU`,
+          attribute,
+        );
       }
       return `${ctx.names.data}.builtin.${snakeToCamel(name)}`;
     }
     case '@diagnostic':
-      throw new Error('Diagnostic attributes are not supported by TGSL!');
+      throw new TranslationError(
+        'Diagnostic attributes are not supported by TypeGPU',
+        attribute,
+      );
     case '@if':
     case '@elif':
     case '@else':
-      throw new Error('Conditional attributes are not supported by TGSL!');
+      throw new TranslationError(
+        'Conditional attributes are not supported by TypeGPU',
+        attribute,
+      );
   }
 }
 

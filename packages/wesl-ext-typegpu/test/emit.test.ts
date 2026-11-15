@@ -3,7 +3,16 @@ import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 
 import { parseSync } from 'vite';
-import { beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type MockInstance,
+  vi,
+} from 'vitest';
 import { link, RecordResolver, type WeslBundle } from 'wesl';
 import type { PluginExtensionApi } from 'wesl-plugin';
 
@@ -30,6 +39,36 @@ async function emit(
 
   return typegpuExtension.emitFn(modulePath, api);
 }
+
+/**
+ * Emits the module and returns the located error that the placeholder for
+ * the untranslatable declaration `name` throws when it's used.
+ */
+async function untranslatableMessage(
+  weslSrc: Record<string, string>,
+  name: string,
+): Promise<string> {
+  const code = await emit(weslSrc);
+  const match = code.match(
+    new RegExp(
+      `^export const ${name} = /\\* @__PURE__ \\*/ \\$untranslatable\\((".*")\\);$`,
+      'm',
+    ),
+  );
+  if (!match) {
+    throw new Error(`'${name}' was not emitted as untranslatable:\n${code}`);
+  }
+  return JSON.parse(match[1] as string);
+}
+
+// Untranslatable declarations are reported with `console.warn`, keep the test output clean.
+let warn: MockInstance<typeof console.warn>;
+beforeEach(() => {
+  warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+});
+afterEach(() => {
+  warn.mockRestore();
+});
 
 const structs = `
 struct StructA { a: vec3f }
@@ -114,10 +153,13 @@ describe('structs', () => {
     ['mat3x4f', "Matrix type 'mat3x4f' is not supported by TypeGPU"],
     ['mat2x2h', "Matrix type 'mat2x2h' is not supported by TypeGPU"],
     ['mat4x4<u32>', "Unsupported matrix parameters for 'mat4x4'"],
-  ])('throws for the unsupported matrix type %s', async (type, message) => {
-    await expect(
-      emit({ 'main.wesl': `struct X { a: ${type} }` }),
-    ).rejects.toThrow(message);
+  ])('reports the unsupported matrix type %s', async (type, message) => {
+    expect(
+      await untranslatableMessage(
+        { 'main.wesl': `struct X { a: ${type} }` },
+        'X',
+      ),
+    ).toContain(message);
   });
 
   it('translates field attributes', async () => {
@@ -228,29 +270,37 @@ describe('structs', () => {
     `);
   });
 
-  it('throws for attributes without a TypeGPU counterpart', async () => {
-    await expect(
-      emit({
-        'main.wesl': `
+  it('reports attributes without a TypeGPU counterpart', async () => {
+    expect(
+      await untranslatableMessage(
+        {
+          'main.wesl': `
           struct Out {
             @blend_src(0) @location(0) color: vec4f,
           }
         `,
-      }),
-    ).rejects.toThrow('Attribute @blend_src is not supported by TypeGPU!');
+        },
+        'Out',
+      ),
+    ).toMatchInlineSnapshot(
+      `"./main.wesl:3:13: Cannot translate struct 'Out', member 'color': Attribute @blend_src is not supported by TypeGPU in '@blend_src(0)'"`,
+    );
   });
 
-  it('throws for builtin values without a TypeGPU counterpart', async () => {
-    await expect(
-      emit({
-        'main.wesl': `
+  it('reports builtin values without a TypeGPU counterpart', async () => {
+    expect(
+      await untranslatableMessage(
+        {
+          'main.wesl': `
           struct In {
             @builtin(not_a_builtin) value: u32,
           }
         `,
-      }),
-    ).rejects.toThrow(
-      'Builtin value not_a_builtin is not supported by TypeGPU!',
+        },
+        'In',
+      ),
+    ).toMatchInlineSnapshot(
+      `"./main.wesl:3:13: Cannot translate struct 'In', member 'value': Builtin value not_a_builtin is not supported by TypeGPU in '@builtin(not_a_builtin)'"`,
     );
   });
 
@@ -552,41 +602,50 @@ describe('expressions', () => {
     `);
   });
 
-  it('throws when a length is not translatable, naming the struct and member', async () => {
-    await expect(
-      emit({
-        'main.wesl': `
+  it('reports a length that is not translatable, naming the struct and member', async () => {
+    expect(
+      await untranslatableMessage(
+        {
+          'main.wesl': `
           struct X { a: array<f32, max(1, 2)> }
         `,
-      }),
-    ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: Cannot translate an expression in member 'a' of struct 'X': function calls ('max(...)') are not supported]`,
+        },
+        'X',
+      ),
+    ).toMatchInlineSnapshot(
+      `"./main.wesl:2:36: Cannot translate struct 'X', member 'a': function calls ('max(...)') are not supported in 'max(1, 2)'"`,
     );
   });
 
-  it('throws when an attribute argument depends on an untranslatable const', async () => {
-    await expect(
-      emit({
-        'main.wesl': `
+  it('reports an attribute argument that depends on an untranslatable const', async () => {
+    expect(
+      await untranslatableMessage(
+        {
+          'main.wesl': `
           const SIZE = max(16, 32);
           struct X { @size(SIZE) a: f32 }
         `,
-      }),
-    ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: Cannot translate an expression in member 'a' of struct 'X': const 'SIZE' cannot be translated: function calls ('max(...)') are not supported]`,
+        },
+        'X',
+      ),
+    ).toMatchInlineSnapshot(
+      `"./main.wesl:3:28: Cannot translate struct 'X', member 'a': const 'SIZE' cannot be translated: function calls ('max(...)') are not supported in 'SIZE'"`,
     );
   });
 
-  it('throws when a struct attribute references something that is not a const', async () => {
-    await expect(
-      emit({
-        'main.wesl': `
+  it('reports a struct attribute that references something that is not a const', async () => {
+    expect(
+      await untranslatableMessage(
+        {
+          'main.wesl': `
           override LOC: u32;
           @location(LOC) struct X { a: f32 }
         `,
-      }),
-    ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: Cannot translate an expression in struct 'X': 'LOC' does not refer to a const]`,
+        },
+        'X',
+      ),
+    ).toMatchInlineSnapshot(
+      `"./main.wesl:3:21: Cannot translate struct 'X': 'LOC' does not refer to a const in 'LOC'"`,
     );
   });
 
@@ -603,10 +662,13 @@ describe('expressions', () => {
       export const N = 2;
       export const Arr = d.arrayOf(d.f32, N * 2);"
     `);
-    await expect(
-      emit({ 'main.wesl': `alias Arr = array<f32, max(1, 2)>;` }),
-    ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: Cannot translate an expression in alias 'Arr': function calls ('max(...)') are not supported]`,
+    expect(
+      await untranslatableMessage(
+        { 'main.wesl': `alias Arr = array<f32, max(1, 2)>;` },
+        'Arr',
+      ),
+    ).toMatchInlineSnapshot(
+      `"./main.wesl:1:24: Cannot translate alias 'Arr': function calls ('max(...)') are not supported in 'max(1, 2)'"`,
     );
   });
 
@@ -1139,10 +1201,191 @@ describe('identifier collisions', () => {
   });
 });
 
-it('throws when the module cannot be resolved', async () => {
-  await expect(emit({}, 'missing.wesl')).rejects.toThrow(
-    /Unable to resolve WESL module/,
+/**
+ * Evaluates emitted code without a bundler: imports are dropped and `d` is a stub
+ * where every schema is a plain object, which is enough to observe which exports throw.
+ */
+function evaluate(code: string): Record<string, unknown> {
+  const names = [...code.matchAll(/^export const (\w+)/gm)].map((m) => m[1]);
+  const body = code
+    .split('\n')
+    .filter((line) => !line.startsWith('import '))
+    .join('\n')
+    .replaceAll('export const', 'const');
+  const d = new Proxy(
+    {},
+    {
+      get: (_, key) =>
+        key === 'struct'
+          ? (fields: object) => ({ $name: () => ({ fields }) })
+          : `d.${String(key)}`,
+    },
   );
+  return new Function('d', `${body}\nreturn { ${names.join(', ')} };`)(d);
+}
+
+describe('errors', () => {
+  it('emits the valid structs of a module next to a broken one', async () => {
+    const code = await emit({
+      'main.wesl': `
+struct Fine { a: f32 }
+struct X {
+  ok: f32,
+  v: vec3<MyT>,
+}
+`,
+    });
+    expect(code).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      const $untranslatable = (message) => new Proxy(function () {}, Object.fromEntries(['get', 'set', 'has', 'apply', 'construct', 'ownKeys', 'getOwnPropertyDescriptor', 'defineProperty', 'deleteProperty', 'getPrototypeOf', 'setPrototypeOf', 'isExtensible', 'preventExtensions'].map((trap) => [trap, () => { throw new Error(message); }])));
+      export const Fine = d.struct({
+        a: d.f32
+      }).$name("Fine");
+      export const X = /* @__PURE__ */ $untranslatable("./main.wesl:5:6: Cannot translate struct 'X', member 'v': Unsupported vector parameters in 'vec3<MyT>'");"
+    `);
+
+    const exports = evaluate(code);
+    expect(exports.Fine).toEqual({ fields: { a: 'd.f32' } });
+    const message =
+      "./main.wesl:5:6: Cannot translate struct 'X', member 'v': Unsupported vector parameters in 'vec3<MyT>'";
+    // importing the broken struct is fine, using it in any way throws the located error
+    const X = exports.X as Record<string, unknown> & (() => unknown);
+    expect(() => X.someProperty).toThrow(message);
+    expect(() => X()).toThrow(message);
+    expect(() => Object.keys(X)).toThrow(message);
+    expect(() => ({ ...X })).toThrow(message);
+  });
+
+  it('warns about broken structs at build time', async () => {
+    await emit({
+      'main.wesl': `
+struct Fine { a: f32 }
+struct X { v: vec3<MyT> }
+`,
+    });
+    expect(warn.mock.calls).toMatchInlineSnapshot(`
+      [
+        [
+          "[wesl-ext-typegpu] ./main.wesl:3:15: Cannot translate struct 'X', member 'v': Unsupported vector parameters in 'vec3<MyT>'",
+        ],
+      ]
+    `);
+  });
+
+  it('locates errors from member and struct attributes', async () => {
+    const code = await emit({
+      'main.wesl': `
+struct Diagnostic {
+  @diagnostic(off, derivative_uniformity) a: f32,
+}
+@interpolate(flat, center, sample) struct Interpolated { a: f32 }
+struct Pointer { p: ptr<nowhere, f32> }
+`,
+    });
+    expect(code.split('\n').filter((l) => l.startsWith('export')))
+      .toMatchInlineSnapshot(`
+        [
+          "export const Diagnostic = /* @__PURE__ */ $untranslatable("./main.wesl:3:3: Cannot translate struct 'Diagnostic', member 'a': Diagnostic attributes are not supported by TypeGPU in '@diagnostic(off, derivative_uniformity)'");",
+          "export const Interpolated = /* @__PURE__ */ $untranslatable("./main.wesl:5:1: Cannot translate struct 'Interpolated': Invalid interpolation parameters in '@interpolate(flat, center, sample)'");",
+          "export const Pointer = /* @__PURE__ */ $untranslatable("./main.wesl:6:25: Cannot translate struct 'Pointer', member 'p': Invalid ptr address space in 'nowhere'");",
+        ]
+      `);
+  });
+
+  it('marks structs that depend on a broken struct as broken, pointing at the root cause', async () => {
+    const code = await emit({
+      'main.wesl': `
+struct Root { v: vec3<MyT> }
+struct Middle { root: Root }
+struct Top { list: array<Middle, 4> }
+struct Unrelated { a: f32 }
+`,
+    });
+    expect(code.split('\n').filter((l) => l.startsWith('export')))
+      .toMatchInlineSnapshot(`
+        [
+          "export const Root = /* @__PURE__ */ $untranslatable("./main.wesl:2:18: Cannot translate struct 'Root', member 'v': Unsupported vector parameters in 'vec3<MyT>'");",
+          "export const Unrelated = d.struct({",
+          "export const Middle = /* @__PURE__ */ $untranslatable("./main.wesl:3:23: Cannot translate struct 'Middle', member 'root': depends on 'Root', which cannot be translated. Root cause: ./main.wesl:2:18: Cannot translate struct 'Root', member 'v': Unsupported vector parameters in 'vec3<MyT>'");",
+          "export const Top = /* @__PURE__ */ $untranslatable("./main.wesl:4:20: Cannot translate struct 'Top', member 'list': depends on 'Middle', which cannot be translated. Root cause: ./main.wesl:2:18: Cannot translate struct 'Root', member 'v': Unsupported vector parameters in 'vec3<MyT>'");",
+        ]
+      `);
+    expect(warn).toHaveBeenCalledTimes(3);
+  });
+
+  it('propagates failures through aliases', async () => {
+    const code = await emit({
+      'main.wesl': `
+alias BrokenAlias = vec3<MyT>;
+struct UsesAlias { a: BrokenAlias }
+struct Broken { v: vec3<MyT> }
+alias AliasOfBroken = array<Broken, 2>;
+alias Fine = vec3f;
+`,
+    });
+    expect(code.split('\n').filter((l) => l.startsWith('export')))
+      .toMatchInlineSnapshot(`
+        [
+          "export const Broken = /* @__PURE__ */ $untranslatable("./main.wesl:4:20: Cannot translate struct 'Broken', member 'v': Unsupported vector parameters in 'vec3<MyT>'");",
+          "export const BrokenAlias = /* @__PURE__ */ $untranslatable("./main.wesl:2:21: Cannot translate alias 'BrokenAlias': Unsupported vector parameters in 'vec3<MyT>'");",
+          "export const Fine = d.vec3f;",
+          "export const AliasOfBroken = /* @__PURE__ */ $untranslatable("./main.wesl:5:23: Cannot translate alias 'AliasOfBroken': depends on 'Broken', which cannot be translated. Root cause: ./main.wesl:4:20: Cannot translate struct 'Broken', member 'v': Unsupported vector parameters in 'vec3<MyT>'");",
+          "export const UsesAlias = /* @__PURE__ */ $untranslatable("./main.wesl:3:23: Cannot translate struct 'UsesAlias', member 'a': depends on 'BrokenAlias', which cannot be translated. Root cause: ./main.wesl:2:21: Cannot translate alias 'BrokenAlias': Unsupported vector parameters in 'vec3<MyT>'");",
+        ]
+      `);
+  });
+
+  it('does not emit imports used only by broken structs', async () => {
+    const code = await emit({
+      'main.wesl': `
+import package::structs::{StructA, StructB};
+struct Fine { a: StructA }
+struct Broken { b: StructB, v: vec3<MyT> }
+`,
+      'structs.wesl': structs,
+    });
+    expect(code).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { StructA } from './structs.wesl?typegpu';
+      const $untranslatable = (message) => new Proxy(function () {}, Object.fromEntries(['get', 'set', 'has', 'apply', 'construct', 'ownKeys', 'getOwnPropertyDescriptor', 'defineProperty', 'deleteProperty', 'getPrototypeOf', 'setPrototypeOf', 'isExtensible', 'preventExtensions'].map((trap) => [trap, () => { throw new Error(message); }])));
+      export const Fine = d.struct({
+        a: StructA
+      }).$name("Fine");
+      export const Broken = /* @__PURE__ */ $untranslatable("./main.wesl:4:32: Cannot translate struct 'Broken', member 'v': Unsupported vector parameters in 'vec3<MyT>'");"
+    `);
+  });
+
+  it('throws when the module cannot be resolved', async () => {
+    await expect(
+      emit({}, 'missing.wesl'),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `[ModuleTranslationError: Unable to resolve WESL module 'package::missing' (missing.wesl), imported as 'missing.wesl']`,
+    );
+  });
+
+  it('throws on cyclic struct dependencies, naming the structs in the cycle', async () => {
+    await expect(
+      emit({
+        'main.wesl': `
+struct Fine { a: f32 }
+struct A { b: B }
+struct B { c: array<C, 2> }
+struct C { a: A }
+struct DependsOnCycle { a: A }
+`,
+      }),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `[ModuleTranslationError: ./main.wesl:3:1: Cyclic dependency between types: A -> B -> C -> A]`,
+    );
+  });
+
+  it('throws on self-referencing structs', async () => {
+    await expect(
+      emit({ 'main.wesl': 'struct Node { next: Node }' }),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `[ModuleTranslationError: ./main.wesl:1:1: Cyclic dependency between types: Node -> Node]`,
+    );
+  });
 });
 
 describe('library imports', () => {
