@@ -17,7 +17,7 @@
     "typecheck": "tsc -p .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "node ../../scripts/prepublishOnly.mjs && tsdown",
+    "prepublishOnly": "node ../../scripts/prepublishOnly.mjs && pnpm typecheck && pnpm test && tsdown",
     "prepack": "node ../../scripts/copyPublishFiles.mjs",
     "postpack": "node ../../scripts/copyPublishFiles.mjs --clean"
   },
