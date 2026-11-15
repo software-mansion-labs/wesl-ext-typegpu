@@ -32,15 +32,17 @@ async function emitReflectJs(
 
   const imports = declsOfKind(ast.moduleElem, 'import');
   const structs = declsOfKind(ast.moduleElem, 'struct');
+  const aliases = declsOfKind(ast.moduleElem, 'alias');
+  const typeDecls = [...structs, ...aliases];
 
   const importsNamespace = findOccupiedIdentifiers(imports);
 
   const importSnippets = generateImportSnippets(
-    structs,
+    typeDecls,
     imports,
     importsNamespace,
   );
-  const structSnippets = generateStructSnippets(structs, importsNamespace);
+  const structSnippets = generateStructSnippets(typeDecls, importsNamespace);
 
   const src = [...importSnippets, ...structSnippets].join('\n');
 

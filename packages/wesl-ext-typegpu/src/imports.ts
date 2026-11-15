@@ -1,10 +1,6 @@
-import type {
-  ImportElem,
-  ImportStatement,
-  StructElem,
-  TypeRefElem,
-} from 'wesl';
+import type { ImportElem, ImportStatement, TypeRefElem } from 'wesl';
 
+import type { TypeDeclElem } from './structs.ts';
 import { asTypeRef } from './types.ts';
 import { assertDefined } from './utils.ts';
 
@@ -13,12 +9,12 @@ interface ImportInfo {
   finalSegment: string;
 }
 export function generateImportSnippets(
-  structElems: StructElem[],
+  declElems: TypeDeclElem[],
   importElems: ImportElem[],
   importsNamespace: Set<string>,
 ): string[] {
   const { inlinedImports, directImports } = findImportsUsedInStructs(
-    structElems,
+    declElems,
     importsNamespace,
   );
 
@@ -35,7 +31,7 @@ export function generateImportSnippets(
  * `inlinedImports` contains names of inlined imports, e.g. `package::file::struct2`
  */
 function findImportsUsedInStructs(
-  structElements: StructElem[],
+  declElements: TypeDeclElem[],
   importsNamespace: Set<string>,
 ): { inlinedImports: Set<string>; directImports: Set<string> } {
   const directImports = new Set<string>();
@@ -57,9 +53,13 @@ function findImportsUsedInStructs(
     }
   }
 
-  for (const struct of structElements) {
-    for (const member of struct.members) {
-      findImportsUsedInType(member.typeRef);
+  for (const decl of declElements) {
+    if (decl.kind === 'alias') {
+      findImportsUsedInType(decl.typeRef);
+    } else {
+      for (const member of decl.members) {
+        findImportsUsedInType(member.typeRef);
+      }
     }
   }
 

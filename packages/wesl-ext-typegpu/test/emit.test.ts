@@ -171,6 +171,131 @@ describe('structs', () => {
   });
 });
 
+describe('aliases', () => {
+  it('emits aliases as exported constants', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          alias Vec = vec3f;
+          alias Arr = array<vec4<f32>, 4>;
+          struct X { a: Vec, b: Arr }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data'
+      export const Vec = d.vec3f;
+      export const Arr = d.arrayOf(d.vec4f, 4);
+      export const X = d.struct({
+        a: Vec,
+        b: Arr
+      }).$name("X");"
+    `);
+  });
+
+  it('orders structs and aliases together by dependency', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          struct Outer { inner: InnerAlias, list: ListAlias }
+          alias ListAlias = array<AliasOfAlias, 2>;
+          alias AliasOfAlias = InnerAlias;
+          alias InnerAlias = Inner;
+          struct Inner { a: f32 }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data'
+      export const Inner = d.struct({
+        a: d.f32
+      }).$name("Inner");
+      export const InnerAlias = Inner;
+      export const AliasOfAlias = InnerAlias;
+      export const ListAlias = d.arrayOf(AliasOfAlias, 2);
+      export const Outer = d.struct({
+        inner: InnerAlias,
+        list: ListAlias
+      }).$name("Outer");"
+    `);
+  });
+
+  it('detects cycles going through aliases', async () => {
+    await expect(
+      emit({
+        'main.wesl': `
+          alias A = array<S, 2>;
+          struct S { a: A }
+        `,
+      }),
+    ).rejects.toThrow(/Cyclic dependency/);
+  });
+
+  it('turns runtime-sized array aliases and the structs using them into functions of the array length', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          alias Arr = array<f32>;
+          alias ArrOfArr = Arr;
+          struct RuntimeSized { len: u32, data: Arr }
+          struct RuntimeSizedNested { data: ArrOfArr }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data'
+      export const Arr = (__arrayLength => d.arrayOf(d.f32, __arrayLength));
+      export const RuntimeSized = (__arrayLength => d.struct({
+        len: d.u32,
+        data: Arr(__arrayLength)
+      }).$name("RuntimeSized"));
+      export const ArrOfArr = Arr;
+      export const RuntimeSizedNested = (__arrayLength => d.struct({
+        data: ArrOfArr(__arrayLength)
+      }).$name("RuntimeSizedNested"));"
+    `);
+  });
+
+  it('imports aliases from other modules', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          import package::types::Vec;
+          import package::types;
+
+          alias LocalVec = types::Vec;
+          struct X { a: Vec, b: LocalVec }
+        `,
+        'types.wesl': 'alias Vec = vec3f;',
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data'
+      import { Vec as Vec } from './types.wesl?typegpu';
+      import { Vec as types$Vec } from './types.wesl?typegpu';
+      export const LocalVec = types$Vec;
+      export const X = d.struct({
+        a: Vec,
+        b: LocalVec
+      }).$name("X");"
+    `);
+  });
+
+  it('emits a module that only declares aliases', async () => {
+    expect(
+      await emit(
+        {
+          'types.wesl': `
+            alias Vec = vec3f;
+            alias Runtime = array<Vec>;
+          `,
+        },
+        'types.wesl',
+      ),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data'
+      export const Vec = d.vec3f;
+      export const Runtime = (__arrayLength => d.arrayOf(Vec, __arrayLength));"
+    `);
+  });
+});
+
 describe('imports', () => {
   it('imports only the structs used by struct fields', async () => {
     expect(
