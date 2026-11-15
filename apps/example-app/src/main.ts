@@ -1,4 +1,5 @@
 /// <reference types="wesl-plugin/suffixes" />
+/// <reference types="wesl-ext-typegpu/suffixes" />
 
 import tgpu from 'typegpu';
 import { createShaderModule, link } from 'wesl';

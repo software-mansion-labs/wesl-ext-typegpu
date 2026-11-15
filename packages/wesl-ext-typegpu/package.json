@@ -5,6 +5,13 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./suffixes": {
+      "types": "./suffixes.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc -p .",
@@ -18,6 +25,9 @@
       ".": {
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
+      },
+      "./suffixes": {
+        "types": "./suffixes.d.ts"
       }
     }
   },
@@ -25,6 +35,7 @@
     "package.json",
     "README.md",
     "LICENSE.md",
+    "suffixes.d.ts",
     "dist/**"
   ],
   "sideEffects": false,
