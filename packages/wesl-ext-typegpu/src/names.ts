@@ -120,3 +120,48 @@ export function exportBinding(
   }
   return `const ${localName} = ${code};\nexport { ${localName} as ${name} };`;
 }
+
+/**
+ * Name of the hoisted getter emitted for each declaration of a module that is part of an import cycle
+ * (see `findModuleCycle`). WGSL identifiers can't contain `$` and inlined imports (`a$b$C`) never start
+ * with it, so this can't collide.
+ */
+export function lazyGetterName(name: string): string {
+  return `$get$${name}`;
+}
+
+/**
+ * Lazy counterpart of {@link exportBinding}, e.g.
+ * ```js
+ * export function $get$A() {
+ *   const B = $get$B();
+ *   return A ??= d.struct({ b: B }).$name("A");
+ * }
+ * export var A = $get$A();
+ * ```
+ * Function declarations and `var` bindings exist as soon as the module is linked, so another module
+ * of the cycle can call the getter before this module is evaluated. The value is still created once.
+ *
+ * @param dependencies bindings used by `code`, each paired with the getter that provides it
+ */
+export function lazyExportBinding(
+  names: EmitNames,
+  name: string,
+  dependencies: [binding: string, getter: string][],
+  code: string,
+): string {
+  const localName = names.local(name);
+  const getter = lazyGetterName(name);
+  return [
+    `export function ${getter}() {`,
+    ...dependencies.map(
+      ([binding, dependencyGetter]) =>
+        `  const ${binding} = ${dependencyGetter}();`,
+    ),
+    `  return ${localName} ??= ${code};`,
+    `}`,
+    localName === name
+      ? `export var ${name} = ${getter}();`
+      : `var ${localName} = ${getter}();\nexport { ${localName} as ${name} };`,
+  ].join('\n');
+}

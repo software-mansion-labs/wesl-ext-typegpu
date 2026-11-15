@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 
@@ -1636,5 +1637,207 @@ describe('library imports', () => {
         b: A
       }).$name("X");"
     `);
+  });
+});
+
+/**
+ * Emits every module, then evaluates them as native ES modules in a separate Node process,
+ * importing `entries` in the given order (as `m0`, `m1`, ...) before running `script`.
+ * `typegpu/data` is replaced with a stub that keeps the fields of each struct,
+ * so the result shows which schema objects ended up where.
+ */
+async function runEmitted(
+  weslSrc: Record<string, string>,
+  entries: string[],
+  script: string,
+): Promise<string> {
+  const dir = mkdtempSync(join(tmpdir(), 'wesl-ext-typegpu-'));
+  try {
+    writeFileSync(
+      join(dir, 'typegpu-data.mjs'),
+      `export const f32 = 'f32';
+       export function arrayOf(element, length) { return { element, length }; }
+       export function struct(fields) {
+         return { fields, $name(name) { this.name = name; return this; } };
+       }`,
+    );
+    for (const modulePath of Object.keys(weslSrc)) {
+      const code = (await emit(weslSrc, modulePath))
+        .replace(`'typegpu/data'`, `'./typegpu-data.mjs'`)
+        .replaceAll(/\.wesl\?typegpu'/g, `.mjs'`);
+      writeFileSync(join(dir, modulePath.replace('.wesl', '.mjs')), code);
+    }
+    const imports = entries
+      .map((entry, i) => `import * as m${i} from './${entry}.mjs';`)
+      .join('\n');
+    writeFileSync(join(dir, 'entry.mjs'), `${imports}\n${script}`);
+    return execFileSync(process.execPath, [join(dir, 'entry.mjs')], {
+      encoding: 'utf8',
+    }).trim();
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+}
+
+describe('import cycles between modules', () => {
+  // The modules import from each other, but the types themselves don't form a cycle
+  const cyclicModules = {
+    'a.wesl': `
+      import package::b::B1;
+      const N = 2;
+      struct A1 { x: array<f32, N> }
+      struct A2 { b: B1 }
+      alias AliasOfB = B1;
+    `,
+    'b.wesl': `
+      import package::a::A1 as Aliased;
+      struct B1 { a: Aliased }
+      struct B2 { a: package::a::A2, b: B1, c: package::a::AliasOfB }
+    `,
+  };
+
+  it('emits declarations behind hoisted getters, reading the cycle through getters', async () => {
+    expect(await emit(cyclicModules, 'a.wesl')).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { $get$B1 } from './b.wesl?typegpu';
+      function $get$N() { return 2; }
+      export const N = $get$N();
+      export function $get$A1() {
+        return A1 ??= d.struct({
+        x: d.arrayOf(d.f32, $get$N())
+      }).$name("A1");
+      }
+      export var A1 = $get$A1();
+      export function $get$A2() {
+        const B1 = $get$B1();
+        return A2 ??= d.struct({
+        b: B1
+      }).$name("A2");
+      }
+      export var A2 = $get$A2();
+      export function $get$AliasOfB() {
+        const B1 = $get$B1();
+        return AliasOfB ??= B1;
+      }
+      export var AliasOfB = $get$AliasOfB();"
+    `);
+    expect(await emit(cyclicModules, 'b.wesl')).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { $get$A1 as $get$Aliased, $get$A2 as $get$package$a$A2, $get$AliasOfB as $get$package$a$AliasOfB } from './a.wesl?typegpu';
+      export function $get$B1() {
+        const Aliased = $get$Aliased();
+        return B1 ??= d.struct({
+        a: Aliased
+      }).$name("B1");
+      }
+      export var B1 = $get$B1();
+      export function $get$B2() {
+        const B1 = $get$B1();
+        const package$a$A2 = $get$package$a$A2();
+        const package$a$AliasOfB = $get$package$a$AliasOfB();
+        return B2 ??= d.struct({
+        a: package$a$A2,
+        b: B1,
+        c: package$a$AliasOfB
+      }).$name("B2");
+      }
+      export var B2 = $get$B2();"
+    `);
+  });
+
+  it.each([
+    ['a', 'b'],
+    ['b', 'a'],
+  ])(
+    'evaluates as native ES modules when %s is imported first',
+    async (...entries) => {
+      const [a, b] = entries[0] === 'a' ? ['m0', 'm1'] : ['m1', 'm0'];
+      const output = await runEmitted(
+        cyclicModules,
+        entries,
+        `const { A1, A2, AliasOfB } = ${a};
+         const { B1, B2 } = ${b};
+         console.log(JSON.stringify({
+           A1length: A1.fields.x.length,
+           A2usesB1: A2.fields.b === B1,
+           AliasIsB1: AliasOfB === B1,
+           B1usesA1: B1.fields.a === A1,
+           B2usesA2: B2.fields.a === A2,
+           B2usesB1: B2.fields.b === B1 && B2.fields.c === B1,
+         }));`,
+      );
+      expect(JSON.parse(output)).toStrictEqual({
+        A1length: 2,
+        A2usesB1: true,
+        AliasIsB1: true,
+        B1usesA1: true,
+        B2usesA2: true,
+        B2usesB1: true,
+      });
+    },
+  );
+
+  it('keeps emitting modules outside of the cycle eagerly', async () => {
+    const weslSrc = {
+      ...cyclicModules,
+      'main.wesl': `
+        import package::a::A2;
+        struct Main { a: A2 }
+      `,
+    };
+    expect(await emit(weslSrc)).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { A2 } from './a.wesl?typegpu';
+      export const Main = d.struct({
+        a: A2
+      }).$name("Main");"
+    `);
+    expect(
+      await runEmitted(
+        weslSrc,
+        ['main', 'b'],
+        `console.log(m0.Main.fields.a.fields.b === m1.B1);`,
+      ),
+    ).toBe('true');
+  });
+
+  it('emits untranslatable declarations of a cycle with a hoisted helper', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const weslSrc = {
+      'a.wesl': `
+        import package::b::B;
+        struct A { b: B }
+        struct Broken { v: vec3<MyT> }
+      `,
+      'b.wesl': `
+        import package::a::A;
+        import package::a::Broken;
+        struct B { x: f32 }
+        struct UsesA { a: A, broken: Broken }
+      `,
+    };
+    expect(
+      await runEmitted(
+        weslSrc,
+        ['b', 'a'],
+        `console.log(m1.A.fields.b === m0.B, m0.UsesA.fields.a === m1.A);
+         try { m1.Broken.propTypes; } catch (e) { console.log('throws'); }`,
+      ),
+    ).toBe('true true\nthrows');
+  });
+
+  it('names the types of a cycle that spans modules', async () => {
+    const weslSrc = {
+      'a.wesl': `
+        import package::b::B;
+        struct A { b: B }
+      `,
+      'b.wesl': `
+        struct B { a: array<package::a::A, 2> }
+      `,
+    };
+    await expect(emit(weslSrc, 'a.wesl')).rejects.toThrow(
+      'Cyclic dependency between types from different modules: package::a::A -> package::b::B -> package::a::A',
+    );
   });
 });

@@ -15,7 +15,8 @@ import {
   quoteSource,
 } from './errors.ts';
 import type { ExpressionContext } from './expressions.ts';
-import { exportBinding } from './names.ts';
+import { importBinding } from './imports.ts';
+import { exportBinding, lazyExportBinding, lazyGetterName } from './names.ts';
 import { Queue } from './queue.ts';
 import { asTypeRef, generateType, wrapInAttributes } from './types.ts';
 
@@ -41,12 +42,21 @@ const UntranslatableHelper = '$untranslatable';
  * A broken declaration is exported as a callable Proxy whose every trap throws the located error,
  * so importing it is fine (the rest of the module stays usable), but using it in any way fails loudly.
  */
-const untranslatableHelperSnippet = `const ${UntranslatableHelper} = (message) => new Proxy(function () {}, Object.fromEntries(['get', 'set', 'has', 'apply', 'construct', 'ownKeys', 'getOwnPropertyDescriptor', 'defineProperty', 'deleteProperty', 'getPrototypeOf', 'setPrototypeOf', 'isExtensible', 'preventExtensions'].map((trap) => [trap, () => { throw new Error(message); }])));`;
+const untranslatableProxy = `new Proxy(function () {}, Object.fromEntries(['get', 'set', 'has', 'apply', 'construct', 'ownKeys', 'getOwnPropertyDescriptor', 'defineProperty', 'deleteProperty', 'getPrototypeOf', 'setPrototypeOf', 'isExtensible', 'preventExtensions'].map((trap) => [trap, () => { throw new Error(message); }])))`;
+const untranslatableHelperSnippet = `const ${UntranslatableHelper} = (message) => ${untranslatableProxy};`;
+/** Hoisted, so that lazy getters can use it before the module is evaluated. */
+const lazyUntranslatableHelperSnippet = `function ${UntranslatableHelper}(message) { return ${untranslatableProxy}; }`;
 
+/**
+ * @param lazyImports set when the module is part of an import cycle (see `findModuleCycle`).
+ *   Every declaration is then emitted behind a hoisted getter (see `lazyExportBinding`), and the
+ *   imported names in this set (declarations of other modules in the cycle) are read through theirs.
+ */
 export function generateStructSnippets(
   declElems: TypeDeclElem[],
   importsNamespace: Set<string>,
   ctx: ExpressionContext,
+  lazyImports?: Set<string>,
 ): TypeDeclSnippets {
   const sortedDecls = sortDecls(declElems);
   const declNames = new Set(sortedDecls.map(declName));
@@ -65,6 +75,29 @@ export function generateStructSnippets(
   const translated: TypeDeclElem[] = [];
   const errorOf = new Map<string, TypeDeclTranslationError>();
 
+  function bind(decl: TypeDeclElem, code: string, dependencies = true) {
+    const name = declName(decl);
+    if (!lazyImports) {
+      return exportBinding(ctx.names, name, code);
+    }
+    const used = dependencies ? declTypeNames(decl) : new Set<string>();
+    return lazyExportBinding(
+      ctx.names,
+      name,
+      [
+        ...[...used.intersection(declNames)].map((dep): [string, string] => [
+          ctx.names.local(dep),
+          lazyGetterName(dep),
+        ]),
+        ...[...used.intersection(lazyImports)].map((dep): [string, string] => {
+          const binding = importBinding(dep, ctx.names);
+          return [binding, lazyGetterName(binding)];
+        }),
+      ],
+      code,
+    );
+  }
+
   for (const decl of sortedDecls) {
     const name = declName(decl);
     let error = findBrokenDependency(decl, declNames, errorOf);
@@ -74,10 +107,20 @@ export function generateStructSnippets(
           if (isRuntimeSized(decl.typeRef, runtimeSizedAliases)) {
             runtimeSizedAliases.add(name);
           }
-          snippets.push(generateAlias(decl, nonTgpuIdentifiers, ctx));
+          snippets.push(
+            bind(decl, generateAlias(decl, nonTgpuIdentifiers, ctx)),
+          );
         } else {
           snippets.push(
-            generateStruct(decl, nonTgpuIdentifiers, ctx, runtimeSizedAliases),
+            bind(
+              decl,
+              generateStruct(
+                decl,
+                nonTgpuIdentifiers,
+                ctx,
+                runtimeSizedAliases,
+              ),
+            ),
           );
         }
         translated.push(decl);
@@ -88,16 +131,20 @@ export function generateStructSnippets(
     }
     errorOf.set(name, error);
     snippets.push(
-      exportBinding(
-        ctx.names,
-        name,
+      bind(
+        decl,
         `/* @__PURE__ */ ${UntranslatableHelper}(${genString(error.message)})`,
+        false,
       ),
     );
   }
 
   if (errorOf.size > 0) {
-    snippets.unshift(untranslatableHelperSnippet);
+    snippets.unshift(
+      lazyImports
+        ? lazyUntranslatableHelperSnippet
+        : untranslatableHelperSnippet,
+    );
   }
 
   return { snippets, translated, errors: [...errorOf.values()] };
@@ -282,6 +329,27 @@ function findNeighborDecls(
   return neighbors;
 }
 
+/**
+ * Names of all types a declaration references, including template parameters,
+ * e.g. `array<package::file::Struct, 4>` gives `array` and `package::file::Struct`.
+ */
+export function declTypeNames(decl: TypeDeclElem): Set<string> {
+  const names = new Set<string>();
+  function visit(type: TypeRefElem) {
+    names.add(type.name.originalName);
+    for (const elem of type.templateParams ?? []) {
+      const subtype = asTypeRef(elem);
+      if (subtype) {
+        visit(subtype);
+      }
+    }
+  }
+  for (const typeRef of typeRefsOf(decl)) {
+    visit(typeRef);
+  }
+  return names;
+}
+
 function findReferencedDecls(
   type: TypeRefElem,
   relevantIdentifiers: Set<string>,
@@ -301,9 +369,9 @@ function findReferencedDecls(
 }
 
 /**
- * Emits `alias Name = T;` as `export const Name = <T>;`.
+ * Translates `alias Name = T;` into the code for `<T>`, which is exported as `Name`.
  * An alias of a runtime-sized array becomes a function of the array length,
- * `export const Name = (__arrayLength => d.arrayOf(T, __arrayLength));`,
+ * `(__arrayLength => d.arrayOf(T, __arrayLength))`,
  * mirroring how runtime-sized structs are emitted.
  */
 export function generateAlias(
@@ -311,13 +379,12 @@ export function generateAlias(
   nonTgpuIdentifiers: Set<string>,
   ctx: ExpressionContext,
 ): string {
-  const name = declName(alias);
   let type = generateType(alias.typeRef, nonTgpuIdentifiers, ctx);
   // An alias of another runtime-sized alias is already a function, so it's exported as is.
   if (isRuntimeSizedArray(alias.typeRef)) {
     type = `(${ctx.names.arrayLength} => ${type})`;
   }
-  return exportBinding(ctx.names, name, type);
+  return type;
 }
 
 export function generateStruct(
@@ -340,7 +407,7 @@ export function generateStruct(
   if (isVariableLength(struct, runtimeSizedAliases)) {
     structDefinition = `(${ctx.names.arrayLength} => ${structDefinition})`;
   }
-  return exportBinding(ctx.names, name, structDefinition);
+  return structDefinition;
 }
 
 function generateMember(

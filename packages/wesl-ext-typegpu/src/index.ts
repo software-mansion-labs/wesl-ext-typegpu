@@ -1,15 +1,14 @@
-import {
-  type ImportElem,
-  type ImportStatement,
-  type WeslAST,
-  declsOfKind,
-  fileToModulePath,
-} from 'wesl';
+import { type WeslAST, declsOfKind, fileToModulePath } from 'wesl';
 import type { PluginExtensionApi } from 'wesl-plugin';
 
 import { translateConsts } from './consts.ts';
+import { findModuleCycle } from './cycles.ts';
 import { ModuleTranslationError } from './errors.ts';
-import { type LibraryReference, generateImportSnippets } from './imports.ts';
+import {
+  type LibraryReference,
+  findOccupiedIdentifiers,
+  generateImportSnippets,
+} from './imports.ts';
 import {
   libraryModuleOfShaderPath,
   resolveLibraryModule,
@@ -48,12 +47,28 @@ async function emitReflectJs(
     ...consts.map((elem) => elem.name.decl.ident.originalName),
   ]);
 
-  const translatedConsts = translateConsts(consts, importsNamespace, names);
+  // Modules of WESL libraries can't import from the user's modules, and cycles within a library aren't handled (yet).
+  const lazyImports =
+    libraryDirId === undefined
+      ? findModuleCycle(moduleName, await api.weslRegistry())?.lazyImports
+      : undefined;
+
+  const translatedConsts = translateConsts(
+    consts,
+    importsNamespace,
+    names,
+    lazyImports !== undefined,
+  );
   const {
     snippets: structSnippets,
     translated,
     errors,
-  } = generateStructSnippets(typeDecls, importsNamespace, translatedConsts.ctx);
+  } = generateStructSnippets(
+    typeDecls,
+    importsNamespace,
+    translatedConsts.ctx,
+    lazyImports,
+  );
 
   // Declarations that failed to translate are emitted as throwing placeholders, so they don't need any imports.
   // This also keeps a broken declaration from pulling in an import that can't be resolved.
@@ -66,6 +81,7 @@ async function emitReflectJs(
       translatedConsts.referencedIdentifiers,
       names,
       libraryDirId,
+      lazyImports,
     );
   await checkLibraryReferences(libraryReferences, api);
 
@@ -142,24 +158,4 @@ async function checkLibraryReferences(
       );
     }
   }
-}
-
-function findOccupiedIdentifiers(importElems: ImportElem[]) {
-  const imports = new Set<string>();
-
-  function traverseImport(importElem: ImportStatement) {
-    const segment = importElem.finalSegment;
-    if (segment.kind === 'import-item') {
-      imports.add(segment.as ?? segment.name);
-    } else {
-      for (const subImport of segment.subtrees) {
-        traverseImport(subImport);
-      }
-    }
-  }
-
-  for (const elem of importElems) {
-    traverseImport(elem.imports);
-  }
-  return imports;
 }
