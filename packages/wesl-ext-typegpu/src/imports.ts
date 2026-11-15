@@ -4,6 +4,7 @@ import type {
   StructElem,
   TypeRefElem,
 } from 'wesl';
+
 import { assertDefined } from './utils.ts';
 
 interface ImportInfo {

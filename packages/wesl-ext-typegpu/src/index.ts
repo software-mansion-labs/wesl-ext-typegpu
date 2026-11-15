@@ -1,5 +1,6 @@
 import { type ImportElem, type ImportStatement, noSuffix } from 'wesl';
 import type { PluginExtensionApi } from 'wesl-plugin';
+
 import { generateImportSnippets } from './imports.ts';
 import { generateStructSnippets } from './structs.ts';
 

@@ -6,8 +6,7 @@
 
 ```sh
 npm install wesl-ext-typegpu
-````
-
+```
 
 ## TypeGPU is created by Software Mansion
 

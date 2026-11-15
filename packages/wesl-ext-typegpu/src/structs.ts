@@ -1,5 +1,6 @@
 import { genObjectFromRawEntries, genString } from 'knitwork';
 import type { StructElem, StructMemberElem, TypeRefElem } from 'wesl';
+
 import { Queue } from './queue.ts';
 import {
   VariableSizedArrayParam,
@@ -51,8 +52,8 @@ function sortStructs(structElements: StructElem[]): StructElem[] {
   const queue: Queue<string> = new Queue(
     dependenciesLeft
       .entries()
-      .filter(([_, dependencies]) => dependencies === 0)
-      .map(([key, _]) => key)
+      .filter(([, dependencies]) => dependencies === 0)
+      .map(([key]) => key)
       .toArray(),
   );
   const visited = new Set();
