@@ -1,5 +1,7 @@
 import type { ExpressionElem, RefIdentElem, TypeRefElem } from 'wesl';
 
+import type { EmitNames } from './names.ts';
+
 /**
  * Thrown when a WGSL expression has no JS equivalent we can emit.
  * Callers add the context (struct, member, const) the expression came from.
@@ -17,6 +19,8 @@ export interface ExpressionContext {
    * or throws an `UntranslatableExpressionError` if it cannot be referenced.
    */
   resolveIdentifier(name: string): string;
+  /** Names of the JS bindings in the emitted module. */
+  names: EmitNames;
 }
 
 const binaryOperators = new Set([

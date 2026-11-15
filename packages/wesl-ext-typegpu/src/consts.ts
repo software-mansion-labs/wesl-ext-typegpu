@@ -6,6 +6,7 @@ import {
   forEachReferencedIdentifier,
   translateExpression,
 } from './expressions.ts';
+import { type EmitNames, exportBinding } from './names.ts';
 
 type ConstTranslation =
   | { ok: true; code: string }
@@ -30,6 +31,7 @@ export interface TranslatedConsts {
 export function translateConsts(
   constElems: ConstElem[],
   importsNamespace: Set<string>,
+  names: EmitNames,
 ): TranslatedConsts {
   const constByName = new Map(
     constElems.map((elem) => [elem.name.decl.ident.originalName, elem]),
@@ -51,15 +53,16 @@ export function translateConsts(
             `const '${name}' cannot be translated: ${translation.reason}`,
           );
         }
-        return name;
+        return names.local(name);
       }
       if (importsNamespace.has(name)) {
-        return name;
+        return names.local(name);
       }
       throw new UntranslatableExpressionError(
         `'${name}' does not refer to a const`,
       );
     },
+    names,
   };
 
   function translate(name: string): ConstTranslation {
@@ -89,7 +92,7 @@ export function translateConsts(
 
     if (translation.ok) {
       // Dependencies were translated (and pushed) while translating the initializer.
-      snippets.push(`export const ${name} = ${translation.code};`);
+      snippets.push(exportBinding(names, name, translation.code));
       if (elem.init) {
         forEachReferencedIdentifier(elem.init, (ref) =>
           referencedIdentifiers.add(ref),

@@ -6,6 +6,7 @@ import type {
 } from 'wesl';
 
 import { forEachReferencedIdentifier } from './expressions.ts';
+import type { EmitNames } from './names.ts';
 import type { TypeDeclElem } from './structs.ts';
 import { asTypeRef } from './types.ts';
 import { assertDefined } from './utils.ts';
@@ -37,7 +38,8 @@ export function generateImportSnippets(
   importElems: ImportElem[],
   importsNamespace: Set<string>,
   modulePath: string,
-  constReferences: Iterable<string> = [],
+  constReferences: Iterable<string>,
+  names: EmitNames,
 ): string[] {
   const { inlinedImports, directImports } = findImportsUsedInStructs(
     declElems,
@@ -47,9 +49,15 @@ export function generateImportSnippets(
 
   const moduleSegments = modulePath.split('::').slice(1);
   return [
-    `import * as d from 'typegpu/data';`,
+    `import * as ${names.data} from 'typegpu/data';`,
     ...generateImports(
-      parseImports(importElems, directImports, inlinedImports, moduleSegments),
+      parseImports(
+        importElems,
+        directImports,
+        inlinedImports,
+        moduleSegments,
+        names,
+      ),
     ),
   ];
 }
@@ -124,6 +132,7 @@ function parseImports(
   directImports: Set<string>,
   inlinedImports: Set<string>,
   moduleSegments: string[],
+  names: EmitNames,
 ): ImportedItem[] {
   const importOfAlias = generateImportMap(importElems, moduleSegments);
   const resultImports: ImportedItem[] = [];
@@ -133,7 +142,7 @@ function parseImports(
     resultImports.push({
       path: toSpecifier(resolved, moduleSegments),
       item: assertDefined(resolved.segments.at(-1)),
-      alias: identifier,
+      alias: names.local(identifier),
     });
   }
 

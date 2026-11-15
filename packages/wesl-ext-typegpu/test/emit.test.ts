@@ -1,5 +1,6 @@
 import { posix } from 'node:path';
 
+import { parseAst } from 'vite';
 import { describe, expect, it } from 'vitest';
 import { link, RecordResolver } from 'wesl';
 import type { PluginExtensionApi } from 'wesl-plugin';
@@ -937,6 +938,206 @@ describe('import paths', () => {
         `,
       }),
     ).rejects.toThrow(/goes above the WESL root/);
+  });
+});
+
+describe('identifier collisions', () => {
+  /** Emits the module and checks that it parses and has no duplicate top-level bindings. */
+  async function emitValid(
+    weslSrc: Record<string, string>,
+    modulePath?: string,
+  ): Promise<string> {
+    const code = await emit(weslSrc, modulePath);
+    const bindings = parseAst(code).body.flatMap((node) => {
+      if (node.type === 'ImportDeclaration') {
+        return node.specifiers.map((specifier) => specifier.local.name);
+      }
+      const declaration =
+        node.type === 'ExportNamedDeclaration' ? node.declaration : node;
+      if (declaration?.type === 'VariableDeclaration') {
+        return declaration.declarations.map((declarator) =>
+          declarator.id.type === 'Identifier' ? declarator.id.name : '',
+        );
+      }
+      return [];
+    });
+    expect(bindings).toEqual([...new Set(bindings)]);
+    return code;
+  }
+
+  it('renames the typegpu/data namespace when a struct is named d', async () => {
+    expect(
+      await emitValid({
+        'main.wesl': `
+          struct d { a: f32 }
+          struct d_1 { a: f32 }
+          struct X { v: d, w: d_1 }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d_2 from 'typegpu/data';
+      export const d = d_2.struct({
+        a: d_2.f32
+      }).$name("d");
+      export const d_1 = d_2.struct({
+        a: d_2.f32
+      }).$name("d_1");
+      export const X = d_2.struct({
+        v: d,
+        w: d_1
+      }).$name("X");"
+    `);
+  });
+
+  it('renames the typegpu/data namespace when an import is aliased d', async () => {
+    expect(
+      await emitValid({
+        'main.wesl': `
+          import package::structs::StructA as d;
+
+          struct X { v: d, w: vec3f }
+        `,
+        'structs.wesl': structs,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d_1 from 'typegpu/data';
+      import { StructA as d } from './structs.wesl?typegpu';
+      export const X = d_1.struct({
+        v: d,
+        w: d_1.vec3f
+      }).$name("X");"
+    `);
+  });
+
+  it('renames the array length parameter when a struct is named __arrayLength', async () => {
+    expect(
+      await emitValid({
+        'main.wesl': `
+          struct __arrayLength { a: f32 }
+          struct RuntimeSized { v: __arrayLength, rest: array<f32> }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const __arrayLength = d.struct({
+        a: d.f32
+      }).$name("__arrayLength");
+      export const RuntimeSized = (__arrayLength_1 => d.struct({
+        v: __arrayLength,
+        rest: d.arrayOf(d.f32, __arrayLength_1)
+      }).$name("RuntimeSized"));"
+    `);
+  });
+
+  it('renames structs whose names are reserved in JS', async () => {
+    expect(
+      await emitValid({
+        'main.wesl': `
+          struct in { a: f32 }
+          struct in_ { a: f32 }
+          struct eval { a: f32 }
+          struct X { v: in, w: in_, u: eval, arguments: f32 }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      const in__1 = d.struct({
+        a: d.f32
+      }).$name("in");
+      export { in__1 as in };
+      export const in_ = d.struct({
+        a: d.f32
+      }).$name("in_");
+      const eval_ = d.struct({
+        a: d.f32
+      }).$name("eval");
+      export { eval_ as eval };
+      export const X = d.struct({
+        v: in__1,
+        w: in_,
+        u: eval_,
+        arguments: d.f32
+      }).$name("X");"
+    `);
+  });
+
+  it('renames imports whose names are reserved in JS', async () => {
+    expect(
+      await emitValid({
+        'main.wesl': `
+          import package::reserved::function;
+          import package::reserved::private as void;
+
+          struct X { v: function, w: void, u: package::reserved::arguments }
+        `,
+        'reserved.wesl': `
+          struct function { a: f32 }
+          struct private { a: f32 }
+          struct arguments { a: f32 }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { arguments as package$reserved$arguments, function as function_, private as void_ } from './reserved.wesl?typegpu';
+      export const X = d.struct({
+        v: function_,
+        w: void_,
+        u: package$reserved$arguments
+      }).$name("X");"
+    `);
+  });
+
+  it('renames consts whose names are reserved in JS', async () => {
+    expect(
+      await emitValid({
+        'main.wesl': `
+          const in = 4;
+          const d = in * 2;
+          struct X { v: array<f32, d> }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d_1 from 'typegpu/data';
+      const in_ = 4;
+      export { in_ as in };
+      export const d = in_ * 2;
+      export const X = d_1.struct({
+        v: d_1.arrayOf(d_1.f32, d)
+      }).$name("X");"
+    `);
+  });
+
+  it('renames aliases whose names collide or are reserved in JS', async () => {
+    expect(
+      await emitValid({
+        'main.wesl': `
+          alias d = f32;
+          alias in = array<d>;
+          struct X { v: in }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d_1 from 'typegpu/data';
+      export const d = d_1.f32;
+      const in_ = (__arrayLength => d_1.arrayOf(d, __arrayLength));
+      export { in_ as in };
+      export const X = (__arrayLength => d_1.struct({
+        v: in_(__arrayLength)
+      }).$name("X"));"
+    `);
+  });
+
+  it('emits a valid module for structs with reserved names', async () => {
+    await emitValid(
+      {
+        'reserved.wesl': `
+          struct function { a: f32 }
+          struct private { a: f32 }
+          struct arguments { a: f32 }
+        `,
+      },
+      'reserved.wesl',
+    );
   });
 });
 

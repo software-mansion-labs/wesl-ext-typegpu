@@ -8,6 +8,7 @@ import type { PluginExtensionApi } from 'wesl-plugin';
 
 import { translateConsts } from './consts.ts';
 import { generateImportSnippets } from './imports.ts';
+import { createEmitNames } from './names.ts';
 import { generateStructSnippets } from './structs.ts';
 
 export const typegpuExtension: {
@@ -39,13 +40,20 @@ async function emitReflectJs(
 
   const importsNamespace = findOccupiedIdentifiers(imports);
 
-  const translatedConsts = translateConsts(consts, importsNamespace);
+  const names = createEmitNames([
+    ...importsNamespace,
+    ...typeDecls.map((decl) => decl.name.ident.originalName),
+    ...consts.map((elem) => elem.name.decl.ident.originalName),
+  ]);
+
+  const translatedConsts = translateConsts(consts, importsNamespace, names);
   const importSnippets = generateImportSnippets(
     typeDecls,
     imports,
     importsNamespace,
     moduleName,
     translatedConsts.referencedIdentifiers,
+    names,
   );
   const structSnippets = generateStructSnippets(
     typeDecls,
