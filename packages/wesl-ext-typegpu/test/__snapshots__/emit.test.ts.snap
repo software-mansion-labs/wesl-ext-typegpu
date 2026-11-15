@@ -1,0 +1,144 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`fixtures > folder/nestedStructs.wesl 1`] = `
+"import * as d from 'typegpu/data'
+export const NestedStructA = d.struct({
+  a: d.vec3f
+}).$name("NestedStructA");
+export const NestedStructB = d.struct({
+  a: d.vec3f
+}).$name("NestedStructB");
+export const NestedStructC = d.struct({
+  a: d.vec3f
+}).$name("NestedStructC");
+export const NestedStructD = d.struct({
+  a: d.vec3f
+}).$name("NestedStructD");
+export const NestedStructE = d.struct({
+  a: d.vec3f
+}).$name("NestedStructE");"
+`;
+
+exports[`fixtures > folder/testImportFromParent.wesl 1`] = `
+"import * as d from 'typegpu/data'
+import { StructA as StructA } from '../structs.wesl?typegpu';
+export const TestStructImportFromParent = d.struct({
+  importedFromParent: StructA
+}).$name("TestStructImportFromParent");"
+`;
+
+exports[`fixtures > structs.wesl 1`] = `
+"import * as d from 'typegpu/data'
+export const StructA = d.struct({
+  a: d.vec3f
+}).$name("StructA");
+export const StructB = d.struct({
+  a: d.vec3f
+}).$name("StructB");
+export const StructC = d.struct({
+  a: d.vec3f
+}).$name("StructC");
+export const StructD = d.struct({
+  a: d.vec3f
+}).$name("StructD");
+export const StructE = d.struct({
+  a: d.vec3f
+}).$name("StructE");
+export const StructF = d.struct({
+  a: d.vec3f
+}).$name("StructF");"
+`;
+
+exports[`fixtures > testStructs.wesl 1`] = `
+"import * as d from 'typegpu/data'
+export const DefinedAbove = d.struct({
+  a: d.vec3f
+}).$name("DefinedAbove");
+export const DefinedBelow = d.struct({
+  b: d.vec3f
+}).$name("DefinedBelow");
+export const DefinedBelowInArray = d.struct({
+  c: d.vec3f
+}).$name("DefinedBelowInArray");
+export const RuntimeSized = (__arrayLength => d.struct({
+  d: d.arrayOf(d.f32, __arrayLength)
+}).$name("RuntimeSized"));
+export const TestStruct = d.location(0, d.struct({
+  standardType: d.vec3f,
+  standardUnwrappedType: d.vec3f,
+  arrayWithLengthType: d.arrayOf(d.vec4f, 3),
+  atomicType: d.atomic(d.u32),
+  uniformPointerType: d.ptrUniform(d.arrayOf(d.f32, 4)),
+  storagePointerType: d.ptrStorage(d.arrayOf(d.f32, 4), "read-write"),
+  definedAboveType: DefinedAbove,
+  definedBelowType: DefinedBelow,
+  definedBelowInArrayType: d.arrayOf(d.arrayOf(DefinedBelowInArray, 4), 2),
+  alignedAttribute: d.align(16+16, DefinedAbove),
+  sizedAttribute: d.size(16, DefinedAbove),
+  locationAttribute: d.location(0, d.vec3f),
+  interpolateAttribute: d.interpolate("flat", d.vec3f),
+  interpolateTwoParamsAttribute: d.interpolate("linear, center", d.vec3f),
+  builtinType: d.builtin.position
+}).$name("TestStruct"));"
+`;
+
+exports[`fixtures > testStructsAttributes.wesl 1`] = `
+"import * as d from 'typegpu/data'
+export const DefinedAbove = d.struct({
+  a: d.vec3f
+}).$name("DefinedAbove");
+export const DefinedBelow = d.struct({
+  b: d.vec3f
+}).$name("DefinedBelow");
+export const DefinedBelowInArray = d.struct({
+  c: d.vec3f
+}).$name("DefinedBelowInArray");
+export const RuntimeSized = (__arrayLength => d.struct({
+  d: d.arrayOf(d.f32, __arrayLength)
+}).$name("RuntimeSized"));
+export const TestStructAttributes = d.struct({
+  standardType: d.vec3f,
+  standardUnwrappedType: d.vec3f,
+  arrayWithLengthType: d.arrayOf(d.vec4f, 3),
+  atomicType: d.atomic(d.u32),
+  uniformPointerType: d.ptrUniform(d.arrayOf(d.f32, 4)),
+  storagePointerType: d.ptrStorage(d.arrayOf(d.f32, 4), "read-write"),
+  definedAboveType: DefinedAbove,
+  definedBelowType: DefinedBelow,
+  definedBelowInArrayType: d.arrayOf(d.arrayOf(DefinedBelowInArray, 4), 2),
+  alignedAttribute: d.align(16+16, DefinedAbove),
+  sizedAttribute: d.size(16, DefinedAbove),
+  locationAttribute: d.location(0, d.vec3f),
+  interpolateAttribute: d.interpolate("flat", d.vec3f),
+  interpolateTwoParamsAttribute: d.interpolate("linear, center", d.vec3f),
+  builtinType: d.builtin.position
+}).$name("TestStructAttributes");"
+`;
+
+exports[`fixtures > testStructsImports.wesl 1`] = `
+"import * as d from 'typegpu/data'
+import { StructA as StructA } from './structs.wesl?typegpu';
+import { StructB as StructB } from './structs.wesl?typegpu';
+import { NestedStructA as NestedStructA } from './folder/nestedStructs.wesl?typegpu';
+import { StructC as StructCAlias } from './structs.wesl?typegpu';
+import { StructD as package$structs$StructD } from './structs.wesl?typegpu';
+import { NestedStructB as package$folder$nestedStructs$NestedStructB } from './folder/nestedStructs.wesl?typegpu';
+import { StructE as structs$StructE } from './structs.wesl?typegpu';
+import { NestedStructC as nestedStructs$NestedStructC } from './folder/nestedStructs.wesl?typegpu';
+import { StructF as ModuleAlias$StructF } from './structs.wesl?typegpu';
+import { NestedStructD as FolderAlias$nestedStructs$NestedStructD } from './folder/nestedStructs.wesl?typegpu';
+import { NestedStructE as NestedAlias$NestedStructE } from './folder/nestedStructs.wesl?typegpu';
+export const TestStructImports = d.struct({
+  imported: StructA,
+  importedFromTree: StructB,
+  importedNested: NestedStructA,
+  importedAlias: StructCAlias,
+  inlinedDirectlyFromPackage: package$structs$StructD,
+  inlinedNestedDirectlyFromPackage: package$folder$nestedStructs$NestedStructB,
+  inlinedModule: structs$StructE,
+  inlinedNestedModule: nestedStructs$NestedStructC,
+  inlinedAlias: ModuleAlias$StructF,
+  inlinedFolderAlias: FolderAlias$nestedStructs$NestedStructD,
+  inlinedNestedAlias: NestedAlias$NestedStructE
+}).$name("TestStructImports");"
+`;
