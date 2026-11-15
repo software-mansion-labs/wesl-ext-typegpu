@@ -1,35 +1,14 @@
-import { type } from 'arktype';
-import { readPackageJSON } from 'pkg-types';
+import { readFile } from 'node:fs/promises';
 
-const PublishTag = type('"alpha" | "beta" | undefined');
+import { assertRunByPnpm, verifyPublishTag } from './publishTag.mjs';
 
-const packageJSON = await readPackageJSON();
-const chosenPublishTag = PublishTag.assert(process.env.npm_config_tag);
+try {
+  assertRunByPnpm(process.env.npm_config_user_agent);
 
-let tagVerified = false;
-for (const { unit: tag } of PublishTag.json) {
-  if (packageJSON.version.includes(tag)) {
-    if (tag !== chosenPublishTag) {
-      throw new Error(
-        `Publishing under a mismatched tag "${chosenPublishTag}" for version ${packageJSON.version}. Use --tag ${tag}`,
-      );
-    }
-
-    tagVerified = true;
-    break;
-  }
-}
-
-if (!tagVerified) {
-  throw new Error(
-    `Publishing under a mismatched tag "${chosenPublishTag}" for version ${packageJSON.version}.`,
-  );
-}
-
-// This project uses pnpm-specific functionality, like extensions to publishConfig in package.json.
-if (!process.env.npm_config_user_agent.startsWith('pnpm')) {
-  console.error(
-    'This script must be executed by pnpm! Make sure to `pnpm run ...` instead of `npm run ...`',
-  );
+  // Lifecycle scripts run in the directory of the package being published.
+  const { version } = JSON.parse(await readFile('package.json', 'utf8'));
+  verifyPublishTag(version, process.env.npm_config_tag);
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 }
