@@ -254,9 +254,15 @@ export function wrapInAttributes(
   const base =
     builtins.length > 0 ? wrapInAttribute(type, builtins[0], src) : type;
 
+  // Wrapping from the last attribute outwards keeps the first attribute as the outermost call,
+  // so the nesting reads in source order. TypeGPU prepends each attribute it applies, so this
+  // also makes the generated WGSL list the attributes in source order.
   return attributes
     .filter((attribute) => attribute.attribute.kind !== '@builtin')
-    .reduce((acc, attribute) => wrapInAttribute(acc, attribute, src), base);
+    .reduceRight(
+      (acc, attribute) => wrapInAttribute(acc, attribute, src),
+      base,
+    );
 }
 
 function wrapInAttribute(

@@ -141,7 +141,7 @@ describe('structs', () => {
         interpolateAttribute: d.interpolate("flat", d.vec3f),
         interpolateTwoParamsAttribute: d.interpolate("linear, center", d.vec3f),
         builtinType: d.builtin.position,
-        chainedAttributes: d.align(16, d.size(32, d.interpolate("perspective, sample", d.location(1, d.vec4f))))
+        chainedAttributes: d.location(1, d.interpolate("perspective, sample", d.size(32, d.align(16, d.vec4f))))
       }).$name("Attributes");"
     `);
   });
