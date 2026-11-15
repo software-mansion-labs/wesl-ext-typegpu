@@ -45,7 +45,7 @@ describe('structs', () => {
   it('emits only the typegpu/data import for a module without structs', async () => {
     expect(
       await emit({ 'main.wesl': 'fn main() -> f32 { return 1.0; }' }),
-    ).toMatchInlineSnapshot(`"import * as d from 'typegpu/data'"`);
+    ).toMatchInlineSnapshot(`"import * as d from 'typegpu/data';"`);
   });
 
   it('translates field types', async () => {
@@ -63,7 +63,7 @@ describe('structs', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
+      "import * as d from 'typegpu/data';
       export const Types = d.struct({
         standardType: d.vec3f,
         standardUnwrappedType: d.vec3f,
@@ -89,7 +89,7 @@ describe('structs', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
+      "import * as d from 'typegpu/data';
       export const Matrices = d.struct({
         a: d.mat2x2f,
         b: d.mat3x3f,
@@ -130,7 +130,7 @@ describe('structs', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
+      "import * as d from 'typegpu/data';
       export const Inner = d.struct({
         a: d.vec3f
       }).$name("Inner");
@@ -157,7 +157,7 @@ describe('structs', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
+      "import * as d from 'typegpu/data';
       export const Out = d.struct({
         invariantFirst: d.invariant(d.builtin.position),
         builtinFirst: d.invariant(d.builtin.position)
@@ -194,7 +194,7 @@ describe('structs', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
+      "import * as d from 'typegpu/data';
       export const Builtins = d.struct({
         clipDistances: d.builtin.clipDistances,
         fragDepth: d.builtin.fragDepth,
@@ -254,7 +254,7 @@ describe('structs', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
+      "import * as d from 'typegpu/data';
       export const Located = d.location(0, d.struct({
         a: d.vec3f
       }).$name("Located"));"
@@ -278,7 +278,7 @@ describe('structs', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
+      "import * as d from 'typegpu/data';
       export const DefinedAbove = d.struct({
         a: d.vec3f
       }).$name("DefinedAbove");
@@ -304,7 +304,7 @@ describe('structs', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
+      "import * as d from 'typegpu/data';
       export const RuntimeSized = (__arrayLength => d.struct({
         d: d.arrayOf(d.f32, __arrayLength)
       }).$name("RuntimeSized"));"
@@ -323,7 +323,7 @@ describe('aliases', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
+      "import * as d from 'typegpu/data';
       export const Vec = d.vec3f;
       export const Arr = d.arrayOf(d.vec4f, 4);
       export const X = d.struct({
@@ -345,7 +345,7 @@ describe('aliases', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
+      "import * as d from 'typegpu/data';
       export const Inner = d.struct({
         a: d.f32
       }).$name("Inner");
@@ -381,7 +381,7 @@ describe('aliases', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
+      "import * as d from 'typegpu/data';
       export const Arr = (__arrayLength => d.arrayOf(d.f32, __arrayLength));
       export const RuntimeSized = (__arrayLength => d.struct({
         len: d.u32,
@@ -407,9 +407,8 @@ describe('aliases', () => {
         'types.wesl': 'alias Vec = vec3f;',
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
-      import { Vec as Vec } from './types.wesl?typegpu';
-      import { Vec as types$Vec } from './types.wesl?typegpu';
+      "import * as d from 'typegpu/data';
+      import { Vec, Vec as types$Vec } from './types.wesl?typegpu';
       export const LocalVec = types$Vec;
       export const X = d.struct({
         a: Vec,
@@ -430,7 +429,7 @@ describe('aliases', () => {
         'types.wesl',
       ),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
+      "import * as d from 'typegpu/data';
       export const Vec = d.vec3f;
       export const Runtime = (__arrayLength => d.arrayOf(Vec, __arrayLength));"
     `);
@@ -459,11 +458,9 @@ describe('imports', () => {
         'folder/nestedStructs.wesl': nestedStructs,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
-      import { StructA as StructA } from './structs.wesl?typegpu';
-      import { StructB as StructB } from './structs.wesl?typegpu';
-      import { NestedStructA as NestedStructA } from './folder/nestedStructs.wesl?typegpu';
-      import { StructC as StructCAlias } from './structs.wesl?typegpu';
+      "import * as d from 'typegpu/data';
+      import { NestedStructA } from './folder/nestedStructs.wesl?typegpu';
+      import { StructA, StructB, StructC as StructCAlias } from './structs.wesl?typegpu';
       export const Imports = d.struct({
         imported: StructA,
         importedFromTree: StructB,
@@ -497,14 +494,9 @@ describe('imports', () => {
         'folder/nestedStructs.wesl': nestedStructs,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
-      import { StructD as package$structs$StructD } from './structs.wesl?typegpu';
-      import { NestedStructB as package$folder$nestedStructs$NestedStructB } from './folder/nestedStructs.wesl?typegpu';
-      import { StructE as structs$StructE } from './structs.wesl?typegpu';
-      import { NestedStructC as nestedStructs$NestedStructC } from './folder/nestedStructs.wesl?typegpu';
-      import { StructF as ModuleAlias$StructF } from './structs.wesl?typegpu';
-      import { NestedStructD as FolderAlias$nestedStructs$NestedStructD } from './folder/nestedStructs.wesl?typegpu';
-      import { NestedStructE as NestedAlias$NestedStructE } from './folder/nestedStructs.wesl?typegpu';
+      "import * as d from 'typegpu/data';
+      import { NestedStructB as package$folder$nestedStructs$NestedStructB, NestedStructC as nestedStructs$NestedStructC, NestedStructD as FolderAlias$nestedStructs$NestedStructD, NestedStructE as NestedAlias$NestedStructE } from './folder/nestedStructs.wesl?typegpu';
+      import { StructD as package$structs$StructD, StructE as structs$StructE, StructF as ModuleAlias$StructF } from './structs.wesl?typegpu';
       export const InlinedImports = d.struct({
         inlinedDirectlyFromPackage: package$structs$StructD,
         inlinedNestedDirectlyFromPackage: package$folder$nestedStructs$NestedStructB,
@@ -514,6 +506,46 @@ describe('imports', () => {
         inlinedFolderAlias: FolderAlias$nestedStructs$NestedStructD,
         inlinedNestedAlias: NestedAlias$NestedStructE
       }).$name("InlinedImports");"
+    `);
+  });
+
+  it('merges imports from the same module into one sorted statement', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          import package::structs::StructC;
+          import package::folder::nestedStructs::NestedStructA;
+          import package::structs::{StructB, StructA as Aliased};
+
+          struct First {
+            c: StructC,
+            nested: NestedStructA,
+            inlined: package::structs::StructD,
+          }
+
+          struct Second {
+            c: StructC,
+            b: StructB,
+            a: Aliased,
+          }
+        `,
+        'structs.wesl': structs,
+        'folder/nestedStructs.wesl': nestedStructs,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { NestedStructA } from './folder/nestedStructs.wesl?typegpu';
+      import { StructA as Aliased, StructB, StructC, StructD as package$structs$StructD } from './structs.wesl?typegpu';
+      export const First = d.struct({
+        c: StructC,
+        nested: NestedStructA,
+        inlined: package$structs$StructD
+      }).$name("First");
+      export const Second = d.struct({
+        c: StructC,
+        b: StructB,
+        a: Aliased
+      }).$name("Second");"
     `);
   });
 });
@@ -562,8 +594,8 @@ describe('import paths', () => {
     const code = await emit(weslSrc, 'folder/main.wesl');
     expectImportsToResolve(code, weslSrc, 'folder/main.wesl');
     expect(code).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
-      import { StructA as StructA } from './structs.wesl?typegpu';
+      "import * as d from 'typegpu/data';
+      import { StructA } from './structs.wesl?typegpu';
       export const ImportFromSibling = d.struct({
         importedFromSibling: StructA
       }).$name("ImportFromSibling");"
@@ -589,9 +621,9 @@ describe('import paths', () => {
     const code = await emit(weslSrc, 'a/b/main.wesl');
     expectImportsToResolve(code, weslSrc, 'a/b/main.wesl');
     expect(code).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
-      import { StructA as StructA } from '../structs.wesl?typegpu';
-      import { StructB as StructB } from '../../structs.wesl?typegpu';
+      "import * as d from 'typegpu/data';
+      import { StructB } from '../../structs.wesl?typegpu';
+      import { StructA } from '../structs.wesl?typegpu';
       import { NestedStructA as super$sibling$NestedStructA } from './sibling.wesl?typegpu';
       export const ImportFromParents = d.struct({
         fromParent: StructA,
@@ -623,12 +655,10 @@ describe('import paths', () => {
     const code = await emit(weslSrc, 'a/b/main.wesl');
     expectImportsToResolve(code, weslSrc, 'a/b/main.wesl');
     expect(code).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
-      import { StructA as StructA } from '../../structs.wesl?typegpu';
-      import { NestedStructA as NestedStructA } from './sibling.wesl?typegpu';
-      import { NestedStructB as NestedStructB } from '../other.wesl?typegpu';
-      import { StructB as package$structs$StructB } from '../../structs.wesl?typegpu';
-      import { NestedStructC as package$a$other$NestedStructC } from '../other.wesl?typegpu';
+      "import * as d from 'typegpu/data';
+      import { StructA, StructB as package$structs$StructB } from '../../structs.wesl?typegpu';
+      import { NestedStructB, NestedStructC as package$a$other$NestedStructC } from '../other.wesl?typegpu';
+      import { NestedStructA } from './sibling.wesl?typegpu';
       export const ImportFromPackage = d.struct({
         fromRoot: StructA,
         fromSibling: NestedStructA,
@@ -657,10 +687,9 @@ describe('import paths', () => {
     const code = await emit(weslSrc);
     expectImportsToResolve(code, weslSrc, 'main.wesl');
     expect(code).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
-      import { StructA as StructA } from './structs.wesl?typegpu';
-      import { StructB as StructB } from './structs.wesl?typegpu';
-      import { NestedStructA as NestedStructA } from './folder/nested.wesl?typegpu';
+      "import * as d from 'typegpu/data';
+      import { NestedStructA } from './folder/nested.wesl?typegpu';
+      import { StructA, StructB } from './structs.wesl?typegpu';
       export const ImportFromTrees = d.struct({
         a: StructA,
         b: StructB,
@@ -684,9 +713,8 @@ describe('import paths', () => {
     const code = await emit(weslSrc);
     expectImportsToResolve(code, weslSrc, 'main.wesl');
     expect(code).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data'
-      import { NestedStructA as package$my_package$supersample$NestedStructA } from './my_package/supersample.wesl?typegpu';
-      import { NestedStructB as superalias$NestedStructB } from './my_package/supersample.wesl?typegpu';
+      "import * as d from 'typegpu/data';
+      import { NestedStructA as package$my_package$supersample$NestedStructA, NestedStructB as superalias$NestedStructB } from './my_package/supersample.wesl?typegpu';
       export const Lookalikes = d.struct({
         inlined: package$my_package$supersample$NestedStructA,
         aliased: superalias$NestedStructB
