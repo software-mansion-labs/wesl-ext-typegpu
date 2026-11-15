@@ -3,7 +3,7 @@ packages:
   - 'packages/**'
 
 catalog:
-  typegpu: ^0.4.6
+  typegpu: ^0.12.10
   '@webgpu/types': ^0.1.54
   typescript: ^5.8.2
   unbuild: ^3.5.0

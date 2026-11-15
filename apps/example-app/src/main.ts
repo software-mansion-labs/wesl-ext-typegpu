@@ -1,7 +1,7 @@
 /// <reference types="wesl-plugin/suffixes" />
 
 import tgpu from 'typegpu';
-import { link } from 'wesl';
+import { createShaderModule, link } from 'wesl';
 
 import { TestStructImportFromParent } from '../shaders/folder/testImportFromParent.wesl?typegpu';
 import linkConfig from '../shaders/main.wesl?link';
@@ -33,7 +33,7 @@ const vertShader = await link({
   rootModuleName: 'main.wesl',
 });
 
-const module = vertShader.createShaderModule(root.device, {});
+const module = createShaderModule(vertShader, root.device);
 
 const canvas = document.querySelector<HTMLCanvasElement>('#canvas');
 if (!canvas) {
