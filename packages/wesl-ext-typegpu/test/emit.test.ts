@@ -27,6 +27,7 @@ async function emit(
   weslSrc: Record<string, string>,
   modulePath = 'main.wesl',
   projectDir = '/nonexistent',
+  conditions?: Record<string, boolean>,
 ): Promise<string> {
   const registry = new RecordResolver(weslSrc);
   const api = {
@@ -38,7 +39,7 @@ async function emit(
       >,
   } as Partial<PluginExtensionApi> as PluginExtensionApi;
 
-  return typegpuExtension.emitFn(modulePath, api);
+  return typegpuExtension.emitFn(modulePath, api, conditions);
 }
 
 /**
@@ -1896,6 +1897,391 @@ describe('import cycles between modules', () => {
     };
     await expect(emit(weslSrc, 'a.wesl')).rejects.toThrow(
       'Cyclic dependency between types from different modules: package::a::A -> package::b::B -> package::a::A',
+    );
+  });
+});
+
+describe('conditions', () => {
+  const conditionalMembers = `
+    struct Conditional {
+      always: f32,
+      @if(FOO) onlyFoo: f32,
+      @if(!FOO) notFoo: f32,
+      @if(FOO && BAR) fooAndBar: f32,
+      @if(FOO || BAR) fooOrBar: f32,
+    }
+  `;
+
+  it('omits members whose condition is unset', async () => {
+    expect(await emit({ 'main.wesl': conditionalMembers }))
+      .toMatchInlineSnapshot(`
+        "import * as d from 'typegpu/data';
+        export const Conditional = d.struct({
+          always: d.f32,
+          notFoo: d.f32
+        }).$name("Conditional");"
+      `);
+  });
+
+  it('includes members whose condition is true', async () => {
+    expect(
+      await emit({ 'main.wesl': conditionalMembers }, 'main.wesl', undefined, {
+        FOO: true,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const Conditional = d.struct({
+        always: d.f32,
+        onlyFoo: d.f32,
+        fooOrBar: d.f32
+      }).$name("Conditional");"
+    `);
+  });
+
+  it('omits members whose condition is false', async () => {
+    expect(
+      await emit({ 'main.wesl': conditionalMembers }, 'main.wesl', undefined, {
+        FOO: false,
+        BAR: true,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const Conditional = d.struct({
+        always: d.f32,
+        notFoo: d.f32,
+        fooOrBar: d.f32
+      }).$name("Conditional");"
+    `);
+  });
+
+  it('keeps other attributes of included members', async () => {
+    expect(
+      await emit(
+        {
+          'main.wesl': `
+            struct Conditional {
+              @if(FOO) @size(16) @align(16) a: f32,
+              @align(16) @if(FOO) b: f32,
+              @if(BAR) @size(16) c: f32,
+            }
+          `,
+        },
+        'main.wesl',
+        undefined,
+        { FOO: true },
+      ),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const Conditional = d.struct({
+        a: d.size(16, d.align(16, d.f32)),
+        b: d.align(16, d.f32)
+      }).$name("Conditional");"
+    `);
+  });
+
+  describe('@elif/@else chains', () => {
+    const chain = `
+      struct Chain {
+        @if(A) value: f32,
+        @elif(B) value: i32,
+        @else value: u32,
+        after: f32,
+      }
+    `;
+
+    it('picks the @if branch', async () => {
+      expect(
+        await emit({ 'main.wesl': chain }, 'main.wesl', undefined, {
+          A: true,
+          B: true,
+        }),
+      ).toMatchInlineSnapshot(`
+        "import * as d from 'typegpu/data';
+        export const Chain = d.struct({
+          value: d.f32,
+          after: d.f32
+        }).$name("Chain");"
+      `);
+    });
+
+    it('picks the @elif branch', async () => {
+      expect(
+        await emit({ 'main.wesl': chain }, 'main.wesl', undefined, { B: true }),
+      ).toMatchInlineSnapshot(`
+          "import * as d from 'typegpu/data';
+          export const Chain = d.struct({
+            value: d.i32,
+            after: d.f32
+          }).$name("Chain");"
+        `);
+    });
+
+    it('picks the @else branch', async () => {
+      expect(await emit({ 'main.wesl': chain })).toMatchInlineSnapshot(`
+        "import * as d from 'typegpu/data';
+        export const Chain = d.struct({
+          value: d.u32,
+          after: d.f32
+        }).$name("Chain");"
+      `);
+    });
+  });
+
+  it('evaluates conditional structs', async () => {
+    const src = `
+      struct Always { a: f32 }
+      @if(FOO) struct OnlyFoo { a: f32 }
+      @if(FOO) struct Variant { a: f32 }
+      @else struct Variant { a: f32, b: f32 }
+    `;
+    expect(await emit({ 'main.wesl': src })).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const Always = d.struct({
+        a: d.f32
+      }).$name("Always");
+      export const Variant = d.struct({
+        a: d.f32,
+        b: d.f32
+      }).$name("Variant");"
+    `);
+    expect(
+      await emit({ 'main.wesl': src }, 'main.wesl', undefined, { FOO: true }),
+    ).toMatchInlineSnapshot(`
+        "import * as d from 'typegpu/data';
+        export const Always = d.struct({
+          a: d.f32
+        }).$name("Always");
+        export const OnlyFoo = d.struct({
+          a: d.f32
+        }).$name("OnlyFoo");
+        export const Variant = d.struct({
+          a: d.f32
+        }).$name("Variant");"
+      `);
+  });
+
+  it('continues an @else chain across other kinds of declarations', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          @if(FOO) fn helper() -> f32 { return 1.0; }
+          @else struct Fallback { a: f32 }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const Fallback = d.struct({
+        a: d.f32
+      }).$name("Fallback");"
+    `);
+  });
+
+  it('does not create dependencies through omitted members', async () => {
+    // Without filtering first, `Inner` would have to be emitted before `Outer`.
+    expect(
+      await emit({
+        'main.wesl': `
+          struct Outer {
+            a: f32,
+            @if(FOO) inner: Inner,
+          }
+          @if(FOO) struct Inner { a: f32 }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const Outer = d.struct({
+        a: d.f32
+      }).$name("Outer");"
+    `);
+  });
+
+  it('does not import types used only by omitted members', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          import package::other::Imported;
+          struct Main {
+            a: f32,
+            @if(FOO) imported: Imported,
+            @if(FOO) inlined: package::other::Inlined,
+          }
+        `,
+        'other.wesl': 'struct Imported { a: f32 } struct Inlined { a: f32 }',
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const Main = d.struct({
+        a: d.f32
+      }).$name("Main");"
+    `);
+  });
+
+  it('does not translate omitted members', async () => {
+    // `vec3<MyT>` can't be translated, but it is never emitted without FOO.
+    expect(
+      await emit({
+        'main.wesl': `
+          struct Main {
+            a: f32,
+            @if(FOO) broken: vec3<MyT>,
+          }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const Main = d.struct({
+        a: d.f32
+      }).$name("Main");"
+    `);
+  });
+
+  it('evaluates conditional imports', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          @if(FOO) import package::foo::Item;
+          @else import package::bar::Item;
+          struct Main { item: Item }
+        `,
+        'foo.wesl': 'struct Item { a: f32 }',
+        'bar.wesl': 'struct Item { a: f32 }',
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { Item } from './bar.wesl?typegpu';
+      export const Main = d.struct({
+        item: Item
+      }).$name("Main");"
+    `);
+  });
+
+  it('forwards true conditions to imported modules', async () => {
+    expect(
+      await emit(
+        {
+          'main.wesl': `
+            import package::other::Imported;
+            struct Main {
+              imported: Imported,
+              inlined: package::other::Inlined,
+            }
+          `,
+          'other.wesl': 'struct Imported { a: f32 } struct Inlined { a: f32 }',
+        },
+        'main.wesl',
+        undefined,
+        { ZED: true, OFF: false, ALPHA: true },
+      ),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { Imported, Inlined as package$other$Inlined } from './other.wesl?typegpu&ALPHA&ZED';
+      export const Main = d.struct({
+        imported: Imported,
+        inlined: package$other$Inlined
+      }).$name("Main");"
+    `);
+  });
+
+  it('evaluates conditional aliases and consts', async () => {
+    const src = `
+      @if(FOO) const N = 4;
+      @else const N = 2;
+      @if(FOO) alias Scalar = f32;
+      @else alias Scalar = i32;
+      struct Main { values: array<Scalar, N> }
+    `;
+    expect(await emit({ 'main.wesl': src })).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const N = 2;
+      export const Scalar = d.i32;
+      export const Main = d.struct({
+        values: d.arrayOf(Scalar, N)
+      }).$name("Main");"
+    `);
+    expect(
+      await emit({ 'main.wesl': src }, 'main.wesl', undefined, { FOO: true }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const N = 4;
+      export const Scalar = d.f32;
+      export const Main = d.struct({
+        values: d.arrayOf(Scalar, N)
+      }).$name("Main");"
+    `);
+  });
+
+  it('detects import cycles between modules under the same conditions', async () => {
+    // \`b\` only imports from \`a\` with FOO, so only then are the modules in a cycle that needs lazy getters
+    const modules = {
+      'a.wesl': `
+        import package::b::B;
+        struct A { b: B }
+        struct Leaf { x: f32 }
+      `,
+      'b.wesl': `
+        @if(FOO) import package::a::Leaf;
+        struct B {
+          x: f32,
+          @if(FOO) leaf: Leaf,
+        }
+      `,
+    };
+    expect(await emit(modules, 'a.wesl')).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { B } from './b.wesl?typegpu';
+      export const A = d.struct({
+        b: B
+      }).$name("A");
+      export const Leaf = d.struct({
+        x: d.f32
+      }).$name("Leaf");"
+    `);
+    expect(await emit(modules, 'a.wesl', undefined, { FOO: true }))
+      .toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { $get$B } from './b.wesl?typegpu&FOO';
+      export function $get$A() {
+        const B = $get$B();
+        return A ??= d.struct({
+        b: B
+      }).$name("A");
+      }
+      export var A = $get$A();
+      export function $get$Leaf() {
+        return Leaf ??= d.struct({
+        x: d.f32
+      }).$name("Leaf");
+      }
+      export var Leaf = $get$Leaf();"
+    `);
+  });
+
+  it('detects cycles between types of different modules under the same conditions', async () => {
+    const modules = {
+      'a.wesl': `
+        import package::b::B;
+        struct A { b: B }
+      `,
+      'b.wesl': `
+        @if(FOO) import package::a::A;
+        struct B {
+          x: f32,
+          @if(FOO) a: array<A, 2>,
+        }
+      `,
+    };
+    expect(await emit(modules, 'a.wesl')).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { B } from './b.wesl?typegpu';
+      export const A = d.struct({
+        b: B
+      }).$name("A");"
+    `);
+    await expect(
+      emit(modules, 'a.wesl', undefined, { FOO: true }),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `[ModuleTranslationError: ./a.wesl:3:9: Cyclic dependency between types from different modules: package::a::A -> package::b::B -> package::a::A]`,
     );
   });
 });

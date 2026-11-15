@@ -1,5 +1,6 @@
-import { type BatchModuleResolver, declsOfKind } from 'wesl';
+import type { BatchModuleResolver } from 'wesl';
 
+import { type Conditions, validDecls } from './conditions.ts';
 import { ModuleTranslationError, formatLocation, locate } from './errors.ts';
 import {
   generateImportMap,
@@ -37,11 +38,12 @@ interface ModuleInfo {
 export function findModuleCycle(
   modulePath: string,
   registry: BatchModuleResolver,
+  conditions: Conditions,
 ): { lazyImports: Set<string> } | undefined {
   const modules = new Map<string, ModuleInfo | undefined>();
   function getModule(path: string): ModuleInfo | undefined {
     if (!modules.has(path)) {
-      modules.set(path, analyzeModule(path, registry));
+      modules.set(path, analyzeModule(path, registry, conditions));
     }
     return modules.get(path);
   }
@@ -140,17 +142,20 @@ function assertNoCrossModuleCycle(
 function analyzeModule(
   modulePath: string,
   registry: BatchModuleResolver,
+  conditions: Conditions,
 ): ModuleInfo | undefined {
   const ast = registry.resolveModule(modulePath);
   if (!ast) {
     return undefined;
   }
   const location = moduleLocation(modulePath);
-  const importElems = declsOfKind(ast.moduleElem, 'import');
-  const declElems: TypeDeclElem[] = [
-    ...declsOfKind(ast.moduleElem, 'struct'),
-    ...declsOfKind(ast.moduleElem, 'alias'),
-  ];
+  // emitted under the same conditions as the module we're emitting, since they're forwarded in the import query
+  const {
+    imports: importElems,
+    structs,
+    aliases,
+  } = validDecls(ast.moduleElem, conditions);
+  const declElems: TypeDeclElem[] = [...structs, ...aliases];
 
   const importOfAlias = generateImportMap(importElems, location);
   const declNames = new Set(

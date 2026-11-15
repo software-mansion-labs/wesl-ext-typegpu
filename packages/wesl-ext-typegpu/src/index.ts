@@ -1,6 +1,7 @@
-import { type WeslAST, declsOfKind, fileToModulePath } from 'wesl';
+import { type WeslAST, fileToModulePath } from 'wesl';
 import type { PluginExtensionApi } from 'wesl-plugin';
 
+import { type Conditions, conditionsQuery, validDecls } from './conditions.ts';
 import { translateConsts } from './consts.ts';
 import { findModuleCycle } from './cycles.ts';
 import { ModuleTranslationError } from './errors.ts';
@@ -28,17 +29,18 @@ export const typegpuExtension: {
 async function emitReflectJs(
   baseId: string,
   api: PluginExtensionApi,
+  conditions: Conditions = {},
 ): Promise<string> {
   const { moduleName, ast, libraryDirId } = await resolveEmittedModule(
     baseId,
     api,
   );
 
-  const imports = declsOfKind(ast.moduleElem, 'import');
-  const structs = declsOfKind(ast.moduleElem, 'struct');
-  const aliases = declsOfKind(ast.moduleElem, 'alias');
+  const { imports, structs, aliases, consts } = validDecls(
+    ast.moduleElem,
+    conditions,
+  );
   const typeDecls = [...structs, ...aliases];
-  const consts = declsOfKind(ast.moduleElem, 'const');
 
   const location = moduleLocation(moduleName, libraryDirId);
   const importOfAlias = generateImportMap(imports, location);
@@ -53,7 +55,8 @@ async function emitReflectJs(
   // Modules of WESL libraries can't import from the user's modules, and cycles within a library aren't handled (yet).
   const lazyImports =
     libraryDirId === undefined
-      ? findModuleCycle(moduleName, await api.weslRegistry())?.lazyImports
+      ? findModuleCycle(moduleName, await api.weslRegistry(), conditions)
+          ?.lazyImports
       : undefined;
 
   const translatedConsts = translateConsts(
@@ -83,9 +86,10 @@ async function emitReflectJs(
       location,
       translatedConsts.referencedIdentifiers,
       names,
+      conditionsQuery(conditions),
       lazyImports,
     );
-  await checkLibraryReferences(libraryReferences, api);
+  await checkLibraryReferences(libraryReferences, api, conditions);
 
   // `PluginExtensionApi` doesn't expose the bundler's `this.warn`, so this is the best we can do at build time.
   for (const error of errors) {
@@ -136,6 +140,7 @@ async function resolveEmittedModule(
 async function checkLibraryReferences(
   references: LibraryReference[],
   api: PluginExtensionApi,
+  conditions: Conditions,
 ): Promise<void> {
   if (references.length === 0) {
     return;
@@ -143,16 +148,10 @@ async function checkLibraryReferences(
   const { tomlDir } = await api.weslToml();
   for (const { modulePath, item, usedBy } of references) {
     const ast = await resolveLibraryModule(modulePath, tomlDir, usedBy);
+    const { structs, aliases, consts } = validDecls(ast.moduleElem, conditions);
     const declared = [
-      ...declsOfKind(ast.moduleElem, 'struct').map(
-        (decl) => decl.name.ident.originalName,
-      ),
-      ...declsOfKind(ast.moduleElem, 'alias').map(
-        (decl) => decl.name.ident.originalName,
-      ),
-      ...declsOfKind(ast.moduleElem, 'const').map(
-        (decl) => decl.name.decl.ident.originalName,
-      ),
+      ...[...structs, ...aliases].map((decl) => decl.name.ident.originalName),
+      ...consts.map((decl) => decl.name.decl.ident.originalName),
     ];
     if (!declared.includes(item)) {
       throw new Error(
