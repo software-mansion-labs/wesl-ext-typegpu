@@ -23,5 +23,5 @@ struct StructF {
 }
 
 fn function_to_ignore() -> vec2f {
-  return vec4f(1.0, 0.0);
+  return vec2f(1.0, 0.0);
 }

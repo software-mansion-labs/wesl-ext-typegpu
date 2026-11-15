@@ -1,5 +1,3 @@
-import package::testStructs::TestStruct;
-
 struct VertexOutput {
   @builtin(position) position: vec4f,
 }

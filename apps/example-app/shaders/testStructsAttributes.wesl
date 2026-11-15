@@ -5,7 +5,7 @@ struct DefinedAbove {
 struct TestStructAttributes {
   standardType: vec3f,
   standardUnwrappedType: vec3<f32>,
-//  booleanVectorType: vec3<bool>,
+  booleanVectorType: vec3<bool>,
 
   arrayWithLengthType: array<vec4f, 3>,
   atomicType: atomic<u32>,
@@ -21,7 +21,7 @@ struct TestStructAttributes {
   @location(0) locationAttribute: vec3f,
   @interpolate(flat) interpolateAttribute: vec3f,
   @interpolate(linear, center) interpolateTwoParamsAttribute: vec3f,
-//  @location(1) @interpolate(flat) locationInterpolateAttribute: vec3f,
+  @location(1) @interpolate(flat) locationInterpolateAttribute: vec3f,
   @builtin(position) builtinType: vec4f,
 }
 
