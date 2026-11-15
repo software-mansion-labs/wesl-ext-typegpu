@@ -135,7 +135,7 @@ describe('structs', () => {
         a: d.vec3f
       }).$name("Inner");
       export const Attributes = d.struct({
-        alignedAttribute: d.align(16+16, Inner),
+        alignedAttribute: d.align(16 + 16, Inner),
         sizedAttribute: d.size(16, Inner),
         locationAttribute: d.location(0, d.vec3f),
         interpolateAttribute: d.interpolate("flat", d.vec3f),
@@ -432,6 +432,212 @@ describe('aliases', () => {
       "import * as d from 'typegpu/data';
       export const Vec = d.vec3f;
       export const Runtime = (__arrayLength => d.arrayOf(Vec, __arrayLength));"
+    `);
+  });
+});
+
+describe('expressions', () => {
+  it('translates array lengths and attribute arguments into JS', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          const MAX_COUNT = 4;
+          struct X {
+            a: array<f32, MAX_COUNT>,
+            b: array<f32, 4u>,
+            @align(MAX_COUNT) c: f32,
+            @location(1u) d: f32,
+            e: array<f32, 0x10i>,
+          }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const MAX_COUNT = 4;
+      export const X = d.struct({
+        a: d.arrayOf(d.f32, MAX_COUNT),
+        b: d.arrayOf(d.f32, 4),
+        c: d.align(MAX_COUNT, d.f32),
+        d: d.location(1, d.f32),
+        e: d.arrayOf(d.f32, 0x10)
+      }).$name("X");"
+    `);
+  });
+
+  it('translates arithmetic', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          const N = 3;
+          struct X {
+            a: array<f32, (N + 1) * 2 - -1>,
+            b: array<f32, 7 / 2>,
+            c: array<f32, (N << 1u) | 1>,
+            d: array<f32, ~(-8) % 5>,
+          }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const N = 3;
+      export const X = d.struct({
+        a: d.arrayOf(d.f32, (N + 1) * 2 - -1),
+        b: d.arrayOf(d.f32, Math.trunc(7 / 2)),
+        c: d.arrayOf(d.f32, (N << 1) | 1),
+        d: d.arrayOf(d.f32, ~(-8) % 5)
+      }).$name("X");"
+    `);
+  });
+
+  it('translates WGSL literals into JS literals', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          const DEC_INT = 12;
+          const I32 = 3i;
+          const U32 = 4u;
+          const HEX_INT = 0x1Fu;
+          const FLOAT = 2.0f;
+          const HALF = 1h;
+          const DOT_FLOAT = 1.;
+          const LEADING_DOT = .5;
+          const EXPONENT = 1e3f;
+          const HEX_FLOAT = 0x1.8p1;
+          const HEX_FLOAT_SUFFIX = 0xAp-1h;
+          const BOOL = true;
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const DEC_INT = 12;
+      export const I32 = 3;
+      export const U32 = 4;
+      export const HEX_INT = 0x1F;
+      export const FLOAT = 2;
+      export const HALF = 1;
+      export const DOT_FLOAT = 1;
+      export const LEADING_DOT = 0.5;
+      export const EXPONENT = 1000;
+      export const HEX_FLOAT = 3;
+      export const HEX_FLOAT_SUFFIX = 5;
+      export const BOOL = true;"
+    `);
+  });
+
+  it('emits consts ordered before their users and skips untranslatable unused consts', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          const DOUBLED = BASE * 2;
+          const UNUSED_VECTOR = vec3f(1.0);
+          const BASE = 3;
+          struct X { a: array<f32, DOUBLED> }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const BASE = 3;
+      export const DOUBLED = BASE * 2;
+      export const X = d.struct({
+        a: d.arrayOf(d.f32, DOUBLED)
+      }).$name("X");"
+    `);
+  });
+
+  it('throws when a length is not translatable, naming the struct and member', async () => {
+    await expect(
+      emit({
+        'main.wesl': `
+          struct X { a: array<f32, max(1, 2)> }
+        `,
+      }),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `[Error: Cannot translate an expression in member 'a' of struct 'X': function calls ('max(...)') are not supported]`,
+    );
+  });
+
+  it('throws when an attribute argument depends on an untranslatable const', async () => {
+    await expect(
+      emit({
+        'main.wesl': `
+          const SIZE = max(16, 32);
+          struct X { @size(SIZE) a: f32 }
+        `,
+      }),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `[Error: Cannot translate an expression in member 'a' of struct 'X': const 'SIZE' cannot be translated: function calls ('max(...)') are not supported]`,
+    );
+  });
+
+  it('throws when a struct attribute references something that is not a const', async () => {
+    await expect(
+      emit({
+        'main.wesl': `
+          override LOC: u32;
+          @location(LOC) struct X { a: f32 }
+        `,
+      }),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `[Error: Cannot translate an expression in struct 'X': 'LOC' does not refer to a const]`,
+    );
+  });
+
+  it('translates lengths in aliases and names the alias when they are not translatable', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          const N = 2u;
+          alias Arr = array<f32, N * 2>;
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const N = 2;
+      export const Arr = d.arrayOf(d.f32, N * 2);"
+    `);
+    await expect(
+      emit({ 'main.wesl': `alias Arr = array<f32, max(1, 2)>;` }),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `[Error: Cannot translate an expression in alias 'Arr': function calls ('max(...)') are not supported]`,
+    );
+  });
+
+  it('imports consts used in lengths, attributes and other consts', async () => {
+    const sources = {
+      'main.wesl': `
+        import package::consts::{SIZE, ALIGN, BASE};
+        const LOCAL = BASE + 1;
+        struct X {
+          a: array<f32, SIZE>,
+          @align(ALIGN) b: f32,
+          c: array<f32, LOCAL>,
+          d: array<f32, package::consts::INLINE * 2>,
+        }
+      `,
+      'consts.wesl': `
+        const SIZE = 4u;
+        const ALIGN = SIZE * 4;
+        const BASE = 2;
+        const INLINE = 8;
+      `,
+    };
+    expect(await emit(sources)).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      import { ALIGN, BASE, INLINE as package$consts$INLINE, SIZE } from './consts.wesl?typegpu';
+      export const LOCAL = BASE + 1;
+      export const X = d.struct({
+        a: d.arrayOf(d.f32, SIZE),
+        b: d.align(ALIGN, d.f32),
+        c: d.arrayOf(d.f32, LOCAL),
+        d: d.arrayOf(d.f32, package$consts$INLINE * 2)
+      }).$name("X");"
+    `);
+    expect(await emit(sources, 'consts.wesl')).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data';
+      export const SIZE = 4;
+      export const ALIGN = SIZE * 4;
+      export const BASE = 2;
+      export const INLINE = 8;"
     `);
   });
 });

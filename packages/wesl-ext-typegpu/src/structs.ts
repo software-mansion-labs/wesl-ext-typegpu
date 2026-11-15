@@ -6,6 +6,10 @@ import type {
   TypeRefElem,
 } from 'wesl';
 
+import {
+  type ExpressionContext,
+  UntranslatableExpressionError,
+} from './expressions.ts';
 import { Queue } from './queue.ts';
 import {
   VariableSizedArrayParam,
@@ -20,6 +24,7 @@ export type TypeDeclElem = StructElem | AliasElem;
 export function generateStructSnippets(
   declElems: TypeDeclElem[],
   importsNamespace: Set<string>,
+  ctx: ExpressionContext,
 ): string[] {
   const sortedDecls = sortDecls(declElems);
 
@@ -40,9 +45,9 @@ export function generateStructSnippets(
       if (isRuntimeSized(elem.typeRef, runtimeSizedAliases)) {
         runtimeSizedAliases.add(declName(elem));
       }
-      return generateAlias(elem, nonTgpuIdentifiers);
+      return generateAlias(elem, nonTgpuIdentifiers, ctx);
     }
-    return generateStruct(elem, nonTgpuIdentifiers, runtimeSizedAliases);
+    return generateStruct(elem, nonTgpuIdentifiers, ctx, runtimeSizedAliases);
   });
 }
 
@@ -150,10 +155,12 @@ function findNeighborDecls(
 export function generateAlias(
   alias: AliasElem,
   nonTgpuIdentifiers: Set<string>,
+  ctx: ExpressionContext,
 ): string {
   const name = declName(alias);
-  const src = alias.name.srcModule.src;
-  let type = generateType(alias.typeRef, nonTgpuIdentifiers, src);
+  let type = withExpressionContext(`alias '${name}'`, () =>
+    generateType(alias.typeRef, nonTgpuIdentifiers, ctx),
+  );
   // An alias of another runtime-sized alias is already a function, so it's exported as is.
   if (isRuntimeSizedArray(alias.typeRef)) {
     type = `(${VariableSizedArrayParam} => ${type})`;
@@ -164,19 +171,25 @@ export function generateAlias(
 export function generateStruct(
   struct: StructElem,
   nonTgpuIdentifiers: Set<string>,
+  ctx: ExpressionContext,
   runtimeSizedAliases: Set<string> = new Set(),
 ): string {
   const name = declName(struct);
-  const src = struct.name.srcModule.src;
   const fieldsCode = genObjectFromRawEntries(
     struct.members.map((member) =>
-      generateMember(member, nonTgpuIdentifiers, runtimeSizedAliases, src),
+      withExpressionContext(
+        `member '${member.name.name}' of struct '${name}'`,
+        () =>
+          generateMember(member, nonTgpuIdentifiers, runtimeSizedAliases, ctx),
+      ),
     ),
   );
-  let structDefinition = wrapInAttributes(
-    `d.struct(${fieldsCode}).$name(${genString(name)})`,
-    struct.attributes,
-    src,
+  let structDefinition = withExpressionContext(`struct '${name}'`, () =>
+    wrapInAttributes(
+      `d.struct(${fieldsCode}).$name(${genString(name)})`,
+      struct.attributes,
+      ctx,
+    ),
   );
   if (isVariableLength(struct, runtimeSizedAliases)) {
     structDefinition = `(${VariableSizedArrayParam} => ${structDefinition})`;
@@ -188,14 +201,29 @@ function generateMember(
   member: StructMemberElem,
   nonTgpuIdentifiers: Set<string>,
   runtimeSizedAliases: Set<string>,
-  src: string,
+  ctx: ExpressionContext,
 ): [string, string] {
-  let type = generateType(member.typeRef, nonTgpuIdentifiers, src);
+  let type = generateType(member.typeRef, nonTgpuIdentifiers, ctx);
   // Runtime-sized aliases are functions of the array length, so we pass it on.
   if (runtimeSizedAliases.has(member.typeRef.name.originalName)) {
     type = `${type}(${VariableSizedArrayParam})`;
   }
-  return [member.name.name, wrapInAttributes(type, member.attributes, src)];
+  return [member.name.name, wrapInAttributes(type, member.attributes, ctx)];
+}
+
+/** Rethrows expression translation errors with a description of where the expression is. */
+function withExpressionContext<T>(location: string, fn: () => T): T {
+  try {
+    return fn();
+  } catch (error) {
+    if (error instanceof UntranslatableExpressionError) {
+      throw new Error(
+        `Cannot translate an expression in ${location}: ${error.message}`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
 }
 
 function isVariableLength(
