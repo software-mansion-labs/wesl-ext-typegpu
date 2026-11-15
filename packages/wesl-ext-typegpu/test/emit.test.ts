@@ -1,6 +1,6 @@
 import { posix } from 'node:path';
 
-import { parseAst } from 'vite';
+import { parseSync } from 'vite';
 import { describe, expect, it } from 'vitest';
 import { link, RecordResolver } from 'wesl';
 import type { PluginExtensionApi } from 'wesl-plugin';
@@ -942,26 +942,17 @@ describe('import paths', () => {
 });
 
 describe('identifier collisions', () => {
-  /** Emits the module and checks that it parses and has no duplicate top-level bindings. */
+  /** Emits the module and checks that it is valid JS, including duplicate and strict mode bindings. */
   async function emitValid(
     weslSrc: Record<string, string>,
     modulePath?: string,
   ): Promise<string> {
     const code = await emit(weslSrc, modulePath);
-    const bindings = parseAst(code).body.flatMap((node) => {
-      if (node.type === 'ImportDeclaration') {
-        return node.specifiers.map((specifier) => specifier.local.name);
-      }
-      const declaration =
-        node.type === 'ExportNamedDeclaration' ? node.declaration : node;
-      if (declaration?.type === 'VariableDeclaration') {
-        return declaration.declarations.map((declarator) =>
-          declarator.id.type === 'Identifier' ? declarator.id.name : '',
-        );
-      }
-      return [];
+    const { errors } = parseSync('emitted.js', code, {
+      sourceType: 'module',
+      showSemanticErrors: true,
     });
-    expect(bindings).toEqual([...new Set(bindings)]);
+    expect(errors.map((error) => error.message)).toEqual([]);
     return code;
   }
 
