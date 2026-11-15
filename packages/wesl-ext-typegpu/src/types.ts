@@ -17,6 +17,21 @@ const vecResolveMap: Record<string, string> = {
   f16: 'h',
 };
 
+const matResolveMap: Record<string, string> = {
+  f32: 'f',
+  f16: 'h',
+};
+
+/**
+ * Matrix schemas exported by `typegpu/data`. WGSL also has non-square and `f16` matrices,
+ * but TypeGPU has no schema for them, so we report those instead of emitting a reference
+ * to something undefined.
+ */
+const supportedMatrices = new Set(['mat2x2f', 'mat3x3f', 'mat4x4f']);
+
+const matrixTypeRegex = /^mat[234]x[234]$/;
+const matrixShorthandRegex = /^mat[234]x[234][fh]$/;
+
 const addressSpaceMap: Record<string, string> = {
   function: 'ptrFn',
   private: 'ptrPrivate',
@@ -71,6 +86,12 @@ export function generateType(
     case 'ptr':
       return parsePtrType(typeRef, importsNamespace, src);
     default:
+      if (matrixTypeRegex.test(typeName)) {
+        return parseMatrixType(typeRef);
+      }
+      if (matrixShorthandRegex.test(typeName)) {
+        return resolveMatrixSchema(typeName);
+      }
       return `d.${typeName}`;
   }
 }
@@ -84,6 +105,35 @@ function parseVectorType(typeRef: TypeRefElem): string {
     throw new Error('Unsupported vector parameters!');
   }
   return `d.${typeRef.name.originalName}${vecResolveMap[componentType]}`;
+}
+
+function parseMatrixType(typeRef: TypeRefElem): string {
+  const typeName = typeRef.name.originalName;
+  const params = typeRef.templateParams ?? [];
+  const componentType = asTypeRef(params[0])?.name.originalName;
+  if (
+    !(params.length === 1 && componentType && componentType in matResolveMap)
+  ) {
+    throw new Error(
+      `Unsupported matrix parameters for '${typeName}', expected a single f32 or f16 component type!`,
+    );
+  }
+  return resolveMatrixSchema(
+    `${typeName}${matResolveMap[componentType]}`,
+    `${typeName}<${componentType}>`,
+  );
+}
+
+function resolveMatrixSchema(
+  schemaName: string,
+  wgslName = schemaName,
+): string {
+  if (!supportedMatrices.has(schemaName)) {
+    throw new Error(
+      `Matrix type '${wgslName}' is not supported by TypeGPU, supported matrix types are: ${[...supportedMatrices].join(', ')}.`,
+    );
+  }
+  return `d.${schemaName}`;
 }
 
 function parseArrayType(

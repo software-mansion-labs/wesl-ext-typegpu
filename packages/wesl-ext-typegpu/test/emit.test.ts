@@ -75,6 +75,43 @@ describe('structs', () => {
     `);
   });
 
+  it('translates matrix types', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          struct Matrices {
+            a: mat2x2<f32>,
+            b: mat3x3<f32>,
+            c: mat4x4<f32>,
+            d: mat4x4f,
+            e: array<mat3x3<f32>, 2>,
+          }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data'
+      export const Matrices = d.struct({
+        a: d.mat2x2f,
+        b: d.mat3x3f,
+        c: d.mat4x4f,
+        d: d.mat4x4f,
+        e: d.arrayOf(d.mat3x3f, 2)
+      }).$name("Matrices");"
+    `);
+  });
+
+  it.each([
+    ['mat2x3<f32>', "Matrix type 'mat2x3<f32>' is not supported by TypeGPU"],
+    ['mat4x4<f16>', "Matrix type 'mat4x4<f16>' is not supported by TypeGPU"],
+    ['mat3x4f', "Matrix type 'mat3x4f' is not supported by TypeGPU"],
+    ['mat2x2h', "Matrix type 'mat2x2h' is not supported by TypeGPU"],
+    ['mat4x4<u32>', "Unsupported matrix parameters for 'mat4x4'"],
+  ])('throws for the unsupported matrix type %s', async (type, message) => {
+    await expect(
+      emit({ 'main.wesl': `struct X { a: ${type} }` }),
+    ).rejects.toThrow(message);
+  });
+
   it('translates field attributes', async () => {
     expect(
       await emit({
