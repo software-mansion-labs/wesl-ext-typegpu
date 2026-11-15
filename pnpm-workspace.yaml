@@ -6,6 +6,14 @@ catalog:
   typegpu: ^0.12.10
   '@webgpu/types': ^0.1.54
   typescript: ^5.8.2
-  tsdown: ^0.23.7
-  vite: ^8.3.8
-  vitest: ^5.1.0
+  vite: npm:@voidzero-dev/vite-plus-core@1.6.0
+  vite-plus: 1.6.0
+onlyBuiltDependencies:
+  - esbuild
+overrides:
+  vite@*: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'

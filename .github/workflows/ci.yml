@@ -18,26 +18,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      # Sets up Node.js and pnpm, then installs dependencies with caching.
+      - uses: voidzero-dev/setup-vp@v1.22.0
         with:
           node-version: 22
-          cache: pnpm
+          cache: true
 
-      - run: pnpm install --frozen-lockfile
-
-      - name: Style
-        run: pnpm test:style
-
-      - name: Typecheck
-        run: pnpm typecheck
+      # Format, lint and typecheck.
+      - name: Check
+        run: vp check
 
       - name: Test
-        run: pnpm test
+        run: vp run test
 
       - name: Build package
-        run: pnpm --filter wesl-ext-typegpu build
+        run: vp run wesl-ext-typegpu#build
 
       - name: Build example app
-        run: pnpm --filter example-app build
+        run: vp run example-app#build

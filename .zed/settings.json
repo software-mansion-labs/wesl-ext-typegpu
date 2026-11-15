@@ -1,21 +1,44 @@
 // For a full list of overridable settings, and general information on folder-specific settings,
 // see the documentation: https://zed.dev/docs/configuring-zed#settings-files
+// Formatting and linting come from the oxc-zed extension, configured through vite.config.ts
+// (see https://viteplus.dev/guide/ide-integration#zed).
 {
-  "editor.formatOnSave": true,
-  "[typescript]": {
-    "editor.codeActionsOnSave": {
-      "source.organizeImports": "explicit"
+  "lsp": {
+    "oxlint": {
+      "initialization_options": {
+        "settings": {
+          "run": "onType",
+          "fixKind": "safe_fix"
+        }
+      }
     },
-    "editor.defaultFormatter": { "language_server": { "name": "oxfmt" } }
+    "oxfmt": {
+      "initialization_options": {
+        "settings": {
+          "fmt.configPath": "./vite.config.ts",
+          "run": "onSave"
+        }
+      }
+    }
   },
   "languages": {
     "TypeScript": {
+      "format_on_save": "on",
+      "prettier": { "allowed": false },
+      "formatter": [{ "language_server": { "name": "oxfmt" } }],
+      "code_actions_on_format": { "source.organizeImports": true },
       "language_servers": ["typescript-language-server", "!vtsls", "..."]
     },
     "TSX": {
+      "format_on_save": "on",
+      "prettier": { "allowed": false },
+      "formatter": [{ "language_server": { "name": "oxfmt" } }],
       "language_servers": ["typescript-language-server", "!vtsls", "..."]
     },
     "JavaScript": {
+      "format_on_save": "on",
+      "prettier": { "allowed": false },
+      "formatter": [{ "language_server": { "name": "oxfmt" } }],
       "language_servers": ["typescript-language-server", "!vtsls", "..."]
     }
   }
