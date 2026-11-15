@@ -125,6 +125,7 @@ describe('structs', () => {
             @interpolate(flat) interpolateAttribute: vec3f,
             @interpolate(linear, center) interpolateTwoParamsAttribute: vec3f,
             @builtin(position) builtinType: vec4f,
+            @location(1) @interpolate(perspective, sample) @size(32) @align(16) chainedAttributes: vec4f,
           }
         `,
       }),
@@ -139,9 +140,110 @@ describe('structs', () => {
         locationAttribute: d.location(0, d.vec3f),
         interpolateAttribute: d.interpolate("flat", d.vec3f),
         interpolateTwoParamsAttribute: d.interpolate("linear, center", d.vec3f),
-        builtinType: d.builtin.position
+        builtinType: d.builtin.position,
+        chainedAttributes: d.align(16, d.size(32, d.interpolate("perspective, sample", d.location(1, d.vec4f))))
       }).$name("Attributes");"
     `);
+  });
+
+  it('applies @invariant to @builtin regardless of attribute order', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          struct Out {
+            @invariant @builtin(position) invariantFirst: vec4f,
+            @builtin(position) @invariant builtinFirst: vec4f,
+          }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data'
+      export const Out = d.struct({
+        invariantFirst: d.invariant(d.builtin.position),
+        builtinFirst: d.invariant(d.builtin.position)
+      }).$name("Out");"
+    `);
+  });
+
+  it('translates every builtin value', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          struct Builtins {
+            @builtin(clip_distances) clipDistances: array<f32, 8>,
+            @builtin(frag_depth) fragDepth: f32,
+            @builtin(front_facing) frontFacing: bool,
+            @builtin(global_invocation_id) globalInvocationId: vec3u,
+            @builtin(global_invocation_index) globalInvocationIndex: u32,
+            @builtin(instance_index) instanceIndex: u32,
+            @builtin(local_invocation_id) localInvocationId: vec3u,
+            @builtin(local_invocation_index) localInvocationIndex: u32,
+            @builtin(num_subgroups) numSubgroups: u32,
+            @builtin(num_workgroups) numWorkgroups: vec3u,
+            @builtin(position) position: vec4f,
+            @builtin(primitive_index) primitiveIndex: u32,
+            @builtin(sample_index) sampleIndex: u32,
+            @builtin(sample_mask) sampleMask: u32,
+            @builtin(subgroup_id) subgroupId: u32,
+            @builtin(subgroup_invocation_id) subgroupInvocationId: u32,
+            @builtin(subgroup_size) subgroupSize: u32,
+            @builtin(vertex_index) vertexIndex: u32,
+            @builtin(workgroup_id) workgroupId: vec3u,
+            @builtin(workgroup_index) workgroupIndex: u32,
+          }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import * as d from 'typegpu/data'
+      export const Builtins = d.struct({
+        clipDistances: d.builtin.clipDistances,
+        fragDepth: d.builtin.fragDepth,
+        frontFacing: d.builtin.frontFacing,
+        globalInvocationId: d.builtin.globalInvocationId,
+        globalInvocationIndex: d.builtin.globalInvocationIndex,
+        instanceIndex: d.builtin.instanceIndex,
+        localInvocationId: d.builtin.localInvocationId,
+        localInvocationIndex: d.builtin.localInvocationIndex,
+        numSubgroups: d.builtin.numSubgroups,
+        numWorkgroups: d.builtin.numWorkgroups,
+        position: d.builtin.position,
+        primitiveIndex: d.builtin.primitiveIndex,
+        sampleIndex: d.builtin.sampleIndex,
+        sampleMask: d.builtin.sampleMask,
+        subgroupId: d.builtin.subgroupId,
+        subgroupInvocationId: d.builtin.subgroupInvocationId,
+        subgroupSize: d.builtin.subgroupSize,
+        vertexIndex: d.builtin.vertexIndex,
+        workgroupId: d.builtin.workgroupId,
+        workgroupIndex: d.builtin.workgroupIndex
+      }).$name("Builtins");"
+    `);
+  });
+
+  it('throws for attributes without a TypeGPU counterpart', async () => {
+    await expect(
+      emit({
+        'main.wesl': `
+          struct Out {
+            @blend_src(0) @location(0) color: vec4f,
+          }
+        `,
+      }),
+    ).rejects.toThrow('Attribute @blend_src is not supported by TypeGPU!');
+  });
+
+  it('throws for builtin values without a TypeGPU counterpart', async () => {
+    await expect(
+      emit({
+        'main.wesl': `
+          struct In {
+            @builtin(not_a_builtin) value: u32,
+          }
+        `,
+      }),
+    ).rejects.toThrow(
+      'Builtin value not_a_builtin is not supported by TypeGPU!',
+    );
   });
 
   it('translates struct attributes', async () => {
