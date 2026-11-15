@@ -7,9 +7,14 @@ import type {
 } from 'wesl';
 
 import {
-  type ExpressionContext,
-  UntranslatableExpressionError,
-} from './expressions.ts';
+  ModuleTranslationError,
+  TranslationError,
+  TypeDeclTranslationError,
+  formatLocation,
+  locate,
+  quoteSource,
+} from './errors.ts';
+import type { ExpressionContext } from './expressions.ts';
 import { exportBinding } from './names.ts';
 import { Queue } from './queue.ts';
 import { asTypeRef, generateType, wrapInAttributes } from './types.ts';
@@ -17,34 +22,159 @@ import { asTypeRef, generateType, wrapInAttributes } from './types.ts';
 /** A module-level declaration that is emitted as an exported TypeGPU schema. */
 export type TypeDeclElem = StructElem | AliasElem;
 
+export interface TypeDeclSnippets {
+  /** Code for the emitted declarations, in dependency order. */
+  snippets: string[];
+  /** Declarations that were translated successfully. */
+  translated: TypeDeclElem[];
+  /** Errors of the declarations that could not be translated, which are emitted as throwing placeholders. */
+  errors: TypeDeclTranslationError[];
+}
+
+/**
+ * Name of the helper emitted into modules with declarations that cannot be translated.
+ * WGSL identifiers cannot contain `$` and inlined imports (`a$b$C`) never start with it, so this cannot collide.
+ */
+const UntranslatableHelper = '$untranslatable';
+
+/**
+ * A broken declaration is exported as a callable Proxy whose every trap throws the located error,
+ * so importing it is fine (the rest of the module stays usable), but using it in any way fails loudly.
+ */
+const untranslatableHelperSnippet = `const ${UntranslatableHelper} = (message) => new Proxy(function () {}, Object.fromEntries(['get', 'set', 'has', 'apply', 'construct', 'ownKeys', 'getOwnPropertyDescriptor', 'defineProperty', 'deleteProperty', 'getPrototypeOf', 'setPrototypeOf', 'isExtensible', 'preventExtensions'].map((trap) => [trap, () => { throw new Error(message); }])));`;
+
 export function generateStructSnippets(
   declElems: TypeDeclElem[],
   importsNamespace: Set<string>,
   ctx: ExpressionContext,
-): string[] {
+): TypeDeclSnippets {
   const sortedDecls = sortDecls(declElems);
+  const declNames = new Set(sortedDecls.map(declName));
 
   // We need to know which type identifiers are in typegpu/std and need to be prepended with the `typegpu/data` namespace.
   // Our approach is to find all type identifiers in the namespace introduced by imports, defined structs
   // and defined aliases, and to prepend everything else (that is not an inlined import) with it.
-  const nonTgpuIdentifiers: Set<string> = new Set(
-    sortedDecls.map(declName),
-  ).union(importsNamespace);
+  const nonTgpuIdentifiers: Set<string> = declNames.union(importsNamespace);
 
   // Aliases of runtime-sized arrays, e.g. `alias Arr = array<f32>;`.
   // They are emitted as functions of the array length, just like runtime-sized structs.
   // Filled in dependency order, so aliases of aliases are detected as well.
   const runtimeSizedAliases = new Set<string>();
 
-  return sortedDecls.map((elem) => {
-    if (elem.kind === 'alias') {
-      if (isRuntimeSized(elem.typeRef, runtimeSizedAliases)) {
-        runtimeSizedAliases.add(declName(elem));
+  const snippets: string[] = [];
+  const translated: TypeDeclElem[] = [];
+  const errorOf = new Map<string, TypeDeclTranslationError>();
+
+  for (const decl of sortedDecls) {
+    const name = declName(decl);
+    let error = findBrokenDependency(decl, declNames, errorOf);
+    if (!error) {
+      try {
+        if (decl.kind === 'alias') {
+          if (isRuntimeSized(decl.typeRef, runtimeSizedAliases)) {
+            runtimeSizedAliases.add(name);
+          }
+          snippets.push(generateAlias(decl, nonTgpuIdentifiers, ctx));
+        } else {
+          snippets.push(
+            generateStruct(decl, nonTgpuIdentifiers, ctx, runtimeSizedAliases),
+          );
+        }
+        translated.push(decl);
+        continue;
+      } catch (e) {
+        error = toDeclError(e, decl);
       }
-      return generateAlias(elem, nonTgpuIdentifiers, ctx);
     }
-    return generateStruct(elem, nonTgpuIdentifiers, ctx, runtimeSizedAliases);
+    errorOf.set(name, error);
+    snippets.push(
+      exportBinding(
+        ctx.names,
+        name,
+        `/* @__PURE__ */ ${UntranslatableHelper}(${genString(error.message)})`,
+      ),
+    );
+  }
+
+  if (errorOf.size > 0) {
+    snippets.unshift(untranslatableHelperSnippet);
+  }
+
+  return { snippets, translated, errors: [...errorOf.values()] };
+}
+
+/**
+ * Returns an error if `decl` uses another declaration of the module that could not be translated,
+ * pointing at the member that uses it and at the root cause.
+ */
+function findBrokenDependency(
+  decl: TypeDeclElem,
+  declNames: Set<string>,
+  errorOf: Map<string, TypeDeclTranslationError>,
+): TypeDeclTranslationError | undefined {
+  const uses: [TypeRefElem, StructMemberElem | undefined][] =
+    decl.kind === 'alias'
+      ? [[decl.typeRef, undefined]]
+      : decl.members.map((member) => [member.typeRef, member]);
+
+  for (const [typeRef, member] of uses) {
+    for (const dependency of findReferencedDecls(typeRef, declNames)) {
+      const dependencyError = errorOf.get(dependency);
+      if (dependencyError) {
+        return new TypeDeclTranslationError({
+          decl,
+          memberName: member?.name.name,
+          span: typeRef,
+          reason: `depends on '${dependency}', which cannot be translated. Root cause: ${rootCauseOf(dependencyError).message}`,
+          rootDeclName: dependencyError.rootDeclName,
+          cause: dependencyError,
+        });
+      }
+    }
+  }
+  return undefined;
+}
+
+function rootCauseOf(
+  error: TypeDeclTranslationError,
+): TypeDeclTranslationError {
+  let current = error;
+  while (current.cause instanceof TypeDeclTranslationError) {
+    current = current.cause;
+  }
+  return current;
+}
+
+function toDeclError(
+  error: unknown,
+  decl: TypeDeclElem,
+): TypeDeclTranslationError {
+  const memberError = error instanceof MemberError ? error : undefined;
+  const cause = memberError ? memberError.cause : error;
+  const member = memberError?.member;
+  const src = decl.name.srcModule.src;
+  const span =
+    (cause instanceof TranslationError ? cause.span : undefined) ??
+    member ??
+    decl.name;
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return new TypeDeclTranslationError({
+    decl,
+    memberName: member?.name.name,
+    span,
+    reason: `${message}${quoteSource(src, span)}`,
+    cause,
   });
+}
+
+/** Marks which member a translation error came from. */
+class MemberError extends Error {
+  readonly member: StructMemberElem;
+
+  constructor(member: StructMemberElem, cause: unknown) {
+    super('Member translation failed', { cause });
+    this.member = member;
+  }
 }
 
 function declName(decl: TypeDeclElem): string {
@@ -68,12 +198,14 @@ function sortDecls(declElements: TypeDeclElem[]): TypeDeclElem[] {
   const dependenciesLeft: Map<string, number> = new Map(
     definedIdentifiers.values().map((identifier) => [identifier, 0]),
   );
+  const dependenciesOf: Map<string, Set<string>> = new Map();
   const dependencyOf: Map<string, Set<string>> = new Map(
     definedIdentifiers.values().map((identifier) => [identifier, new Set()]),
   );
 
   for (const [identifier, decl] of definedDeclElements) {
     const dependencies = findNeighborDecls(decl, definedIdentifiers);
+    dependenciesOf.set(identifier, dependencies);
     dependenciesLeft.set(identifier, dependencies.size);
 
     for (const neighbor of dependencies) {
@@ -88,7 +220,7 @@ function sortDecls(declElements: TypeDeclElem[]): TypeDeclElem[] {
       .map(([key]) => key)
       .toArray(),
   );
-  const visited = new Set();
+  const visited = new Set<string>();
   const orderedDecls: TypeDeclElem[] = [];
 
   while (queue.length > 0) {
@@ -109,12 +241,34 @@ function sortDecls(declElements: TypeDeclElem[]): TypeDeclElem[] {
   }
 
   if (visited.size !== definedIdentifiers.size) {
-    throw new Error(
-      'Cyclic dependency in struct member or alias types detected!',
+    const cycle = findCycle(definedIdentifiers, visited, dependenciesOf);
+    const first = definedDeclElements.get(cycle[0]) as TypeDeclElem;
+    throw new ModuleTranslationError(
+      `${formatLocation(locate(first, first.start))}: Cyclic dependency between types: ${[...cycle, cycle[0]].join(' -> ')}`,
     );
   }
 
   return orderedDecls;
+}
+
+/**
+ * Every declaration left unvisited by the topological sort depends on at least one other unvisited one,
+ * so following those dependencies from any of them must eventually loop.
+ */
+function findCycle(
+  identifiers: Set<string>,
+  visited: Set<string>,
+  dependenciesOf: Map<string, Set<string>>,
+): string[] {
+  const path: string[] = [];
+  let current = [...identifiers].find((id) => !visited.has(id)) as string;
+  while (!path.includes(current)) {
+    path.push(current);
+    current = [...(dependenciesOf.get(current) ?? [])].find(
+      (dependency) => !visited.has(dependency),
+    ) as string;
+  }
+  return path.slice(path.indexOf(current));
 }
 
 function findNeighborDecls(
@@ -122,24 +276,28 @@ function findNeighborDecls(
   relevantIdentifiers: Set<string>,
 ): Set<string> {
   const neighbors: Set<string> = new Set();
-
-  function findTypeReferences(type: TypeRefElem) {
-    const name = type.name.originalName;
-    if (relevantIdentifiers.has(name)) {
-      neighbors.add(name);
-    }
-    for (const elem of type.templateParams ?? []) {
-      const subtype = asTypeRef(elem);
-      if (subtype) {
-        findTypeReferences(subtype);
-      }
-    }
-  }
-
   for (const typeRef of typeRefsOf(decl)) {
-    findTypeReferences(typeRef);
+    findReferencedDecls(typeRef, relevantIdentifiers, neighbors);
   }
   return neighbors;
+}
+
+function findReferencedDecls(
+  type: TypeRefElem,
+  relevantIdentifiers: Set<string>,
+  found: Set<string> = new Set(),
+): Set<string> {
+  const name = type.name.originalName;
+  if (relevantIdentifiers.has(name)) {
+    found.add(name);
+  }
+  for (const elem of type.templateParams ?? []) {
+    const subtype = asTypeRef(elem);
+    if (subtype) {
+      findReferencedDecls(subtype, relevantIdentifiers, found);
+    }
+  }
+  return found;
 }
 
 /**
@@ -154,9 +312,7 @@ export function generateAlias(
   ctx: ExpressionContext,
 ): string {
   const name = declName(alias);
-  let type = withExpressionContext(`alias '${name}'`, () =>
-    generateType(alias.typeRef, nonTgpuIdentifiers, ctx),
-  );
+  let type = generateType(alias.typeRef, nonTgpuIdentifiers, ctx);
   // An alias of another runtime-sized alias is already a function, so it's exported as is.
   if (isRuntimeSizedArray(alias.typeRef)) {
     type = `(${ctx.names.arrayLength} => ${type})`;
@@ -173,19 +329,13 @@ export function generateStruct(
   const name = declName(struct);
   const fieldsCode = genObjectFromRawEntries(
     struct.members.map((member) =>
-      withExpressionContext(
-        `member '${member.name.name}' of struct '${name}'`,
-        () =>
-          generateMember(member, nonTgpuIdentifiers, runtimeSizedAliases, ctx),
-      ),
+      generateMember(member, nonTgpuIdentifiers, runtimeSizedAliases, ctx),
     ),
   );
-  let structDefinition = withExpressionContext(`struct '${name}'`, () =>
-    wrapInAttributes(
-      `${ctx.names.data}.struct(${fieldsCode}).$name(${genString(name)})`,
-      struct.attributes,
-      ctx,
-    ),
+  let structDefinition = wrapInAttributes(
+    `${ctx.names.data}.struct(${fieldsCode}).$name(${genString(name)})`,
+    struct.attributes,
+    ctx,
   );
   if (isVariableLength(struct, runtimeSizedAliases)) {
     structDefinition = `(${ctx.names.arrayLength} => ${structDefinition})`;
@@ -199,26 +349,15 @@ function generateMember(
   runtimeSizedAliases: Set<string>,
   ctx: ExpressionContext,
 ): [string, string] {
-  let type = generateType(member.typeRef, nonTgpuIdentifiers, ctx);
-  // Runtime-sized aliases are functions of the array length, so we pass it on.
-  if (runtimeSizedAliases.has(member.typeRef.name.originalName)) {
-    type = `${type}(${ctx.names.arrayLength})`;
-  }
-  return [member.name.name, wrapInAttributes(type, member.attributes, ctx)];
-}
-
-/** Rethrows expression translation errors with a description of where the expression is. */
-function withExpressionContext<T>(location: string, fn: () => T): T {
   try {
-    return fn();
-  } catch (error) {
-    if (error instanceof UntranslatableExpressionError) {
-      throw new Error(
-        `Cannot translate an expression in ${location}: ${error.message}`,
-        { cause: error },
-      );
+    let type = generateType(member.typeRef, nonTgpuIdentifiers, ctx);
+    // Runtime-sized aliases are functions of the array length, so we pass it on.
+    if (runtimeSizedAliases.has(member.typeRef.name.originalName)) {
+      type = `${type}(${ctx.names.arrayLength})`;
     }
-    throw error;
+    return [member.name.name, wrapInAttributes(type, member.attributes, ctx)];
+  } catch (error) {
+    throw new MemberError(member, error);
   }
 }
 

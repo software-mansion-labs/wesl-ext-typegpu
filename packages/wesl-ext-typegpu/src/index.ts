@@ -8,6 +8,7 @@ import {
 import type { PluginExtensionApi } from 'wesl-plugin';
 
 import { translateConsts } from './consts.ts';
+import { ModuleTranslationError } from './errors.ts';
 import { type LibraryReference, generateImportSnippets } from './imports.ts';
 import {
   libraryModuleOfShaderPath,
@@ -48,9 +49,17 @@ async function emitReflectJs(
   ]);
 
   const translatedConsts = translateConsts(consts, importsNamespace, names);
+  const {
+    snippets: structSnippets,
+    translated,
+    errors,
+  } = generateStructSnippets(typeDecls, importsNamespace, translatedConsts.ctx);
+
+  // Declarations that failed to translate are emitted as throwing placeholders, so they don't need any imports.
+  // This also keeps a broken declaration from pulling in an import that can't be resolved.
   const { snippets: importSnippets, libraryReferences } =
     generateImportSnippets(
-      typeDecls,
+      translated,
       imports,
       importsNamespace,
       moduleName,
@@ -59,11 +68,11 @@ async function emitReflectJs(
       libraryDirId,
     );
   await checkLibraryReferences(libraryReferences, api);
-  const structSnippets = generateStructSnippets(
-    typeDecls,
-    importsNamespace,
-    translatedConsts.ctx,
-  );
+
+  // `PluginExtensionApi` doesn't expose the bundler's `this.warn`, so this is the best we can do at build time.
+  for (const error of errors) {
+    console.warn(`[wesl-ext-typegpu] ${error.message}`);
+  }
 
   const src = [
     ...importSnippets,
@@ -95,7 +104,9 @@ async function resolveEmittedModule(
   const registry = await api.weslRegistry();
   const ast = registry.resolveModule(moduleName);
   if (!ast) {
-    throw new Error(`Unable to resolve WESL module '${moduleName}'!`);
+    throw new ModuleTranslationError(
+      `Unable to resolve WESL module '${moduleName}' (${rootModule}), imported as '${baseId}'`,
+    );
   }
   return { moduleName, ast };
 }
