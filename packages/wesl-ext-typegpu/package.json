@@ -17,7 +17,9 @@
     "typecheck": "tsc -p .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "node ../../scripts/prepublishOnly.mjs && tsdown"
+    "prepublishOnly": "node ../../scripts/prepublishOnly.mjs && tsdown",
+    "prepack": "node ../../scripts/copyPublishFiles.mjs",
+    "postpack": "node ../../scripts/copyPublishFiles.mjs --clean"
   },
   "publishConfig": {
     "main": "./dist/index.mjs",
@@ -50,10 +52,24 @@
     "webgpu"
   ],
   "license": "MIT",
+  "author": "Software Mansion (https://swmansion.com)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/software-mansion-labs/wesl-ext-typegpu.git",
+    "directory": "packages/wesl-ext-typegpu"
+  },
+  "homepage": "https://github.com/software-mansion-labs/wesl-ext-typegpu/tree/main/packages/wesl-ext-typegpu#readme",
+  "bugs": {
+    "url": "https://github.com/software-mansion-labs/wesl-ext-typegpu/issues"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "packageManager": "pnpm@10.6.3+sha512.bb45e34d50a9a76e858a95837301bfb6bd6d35aea2c5d52094fa497a467c43f5c440103ce2511e9e0a2f89c3d6071baac3358fc68ac6fb75e2ceb3d2736065e6",
   "devDependencies": {
     "@types/node": "^22.13.10",
     "tsdown": "catalog:",
+    "typegpu": "catalog:",
     "typescript": "catalog:",
     "vite": "^6.4.0",
     "vitest": "^5.1.0",
@@ -61,6 +77,7 @@
     "wesl-plugin": "^0.6.81"
   },
   "peerDependencies": {
+    "typegpu": "^0.12.0",
     "wesl": "^0.7.31",
     "wesl-plugin": "^0.6.81"
   },
