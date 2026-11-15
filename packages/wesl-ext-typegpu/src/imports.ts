@@ -14,6 +14,15 @@ interface ResolvedPath {
   segments: string[];
 }
 
+interface ImportedItem {
+  /** Specifier of the imported module, without the `.wesl?typegpu` suffix */
+  path: string;
+  /** Name of the item exported by the module */
+  item: string;
+  /** Local identifier the item is bound to */
+  alias: string;
+}
+
 /**
  * @param modulePath path of the module being emitted, e.g. `package::folder::main`
  */
@@ -29,11 +38,12 @@ export function generateImportSnippets(
   );
 
   const moduleSegments = modulePath.split('::').slice(1);
-  const imports = [
-    `import * as d from 'typegpu/data'`,
-    ...parseImports(importElems, directImports, inlinedImports, moduleSegments),
+  return [
+    `import * as d from 'typegpu/data';`,
+    ...generateImports(
+      parseImports(importElems, directImports, inlinedImports, moduleSegments),
+    ),
   ];
-  return imports;
 }
 
 /**
@@ -82,19 +92,17 @@ function parseImports(
   directImports: Set<string>,
   inlinedImports: Set<string>,
   moduleSegments: string[],
-): string[] {
+): ImportedItem[] {
   const importOfAlias = generateImportMap(importElems, moduleSegments);
-  const resultImports: string[] = [];
+  const resultImports: ImportedItem[] = [];
 
   for (const identifier of directImports) {
     const resolved = assertDefined(importOfAlias.get(identifier));
-    resultImports.push(
-      generateImport(
-        toSpecifier(resolved, moduleSegments),
-        assertDefined(resolved.segments.at(-1)),
-        identifier,
-      ),
-    );
+    resultImports.push({
+      path: toSpecifier(resolved, moduleSegments),
+      item: assertDefined(resolved.segments.at(-1)),
+      alias: identifier,
+    });
   }
 
   for (const inlinedImport of inlinedImports) {
@@ -108,13 +116,11 @@ function parseImports(
       : // the path is self-contained, e.g. 'package::item'
         resolvePath(splitInlined, moduleSegments);
 
-    resultImports.push(
-      generateImport(
-        toSpecifier(resolved, moduleSegments),
-        assertDefined(splitInlined.at(-1)),
-        splitInlined.join('$'),
-      ),
-    );
+    resultImports.push({
+      path: toSpecifier(resolved, moduleSegments),
+      item: assertDefined(splitInlined.at(-1)),
+      alias: splitInlined.join('$'),
+    });
   }
 
   return resultImports;
@@ -211,10 +217,26 @@ function generateImportMap(
   return importOfAlias;
 }
 
-function generateImport(
-  path: string,
-  item: string,
-  alias: string | undefined,
-): string {
-  return `import { ${item}${alias ? ` as ${alias}` : ''} } from '${path}.wesl?typegpu';`;
+/**
+ * Generates one import statement per module, with the modules and the items
+ * within each statement sorted, so the output is stable.
+ */
+function generateImports(importedItems: ImportedItem[]): string[] {
+  const specifiersOfPath = new Map<string, Set<string>>();
+  for (const { path, item, alias } of importedItems) {
+    const specifiers = specifiersOfPath.get(path) ?? new Set<string>();
+    specifiers.add(item === alias ? item : `${item} as ${alias}`);
+    specifiersOfPath.set(path, specifiers);
+  }
+
+  return [...specifiersOfPath.entries()]
+    .sort(([a], [b]) => compare(a, b))
+    .map(([path, specifiers]) => {
+      const sorted = [...specifiers].sort(compare);
+      return `import { ${sorted.join(', ')} } from '${path}.wesl?typegpu';`;
+    });
+}
+
+function compare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
