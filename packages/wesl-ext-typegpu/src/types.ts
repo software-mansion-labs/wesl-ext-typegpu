@@ -195,6 +195,44 @@ function parsePtrType(
   return `d.${ptrName}(${subType}${ptrName === 'ptrStorage' && accessMode ? `, "${accessMode}"` : ''})`;
 }
 
+/**
+ * Attributes (written as `@name(...)` in WGSL) that have a counterpart in `typegpu/data`,
+ * mapped to the name of that counterpart. `@interpolate` and `@builtin` are parsed into
+ * their own element kinds by wesl, so they are handled separately.
+ */
+const attributeMap = new Map([
+  ['align', 'align'],
+  ['size', 'size'],
+  ['location', 'location'],
+  ['invariant', 'invariant'],
+]);
+
+/**
+ * Builtin values (written as `@builtin(name)` in WGSL) available on `d.builtin` in `typegpu/data`.
+ */
+const builtinNames = new Set([
+  'clip_distances',
+  'frag_depth',
+  'front_facing',
+  'global_invocation_id',
+  'global_invocation_index',
+  'instance_index',
+  'local_invocation_id',
+  'local_invocation_index',
+  'num_subgroups',
+  'num_workgroups',
+  'position',
+  'primitive_index',
+  'sample_index',
+  'sample_mask',
+  'subgroup_id',
+  'subgroup_invocation_id',
+  'subgroup_size',
+  'vertex_index',
+  'workgroup_id',
+  'workgroup_index',
+]);
+
 export function wrapInAttributes(
   type: string,
   attributes: AttributeElem[] | undefined,
@@ -203,39 +241,75 @@ export function wrapInAttributes(
   if (!attributes) {
     return type;
   }
-  return attributes.reduce((acc, attribute) => {
-    switch (attribute.attribute.kind) {
-      case '@attribute': {
-        const args = attribute.attribute.params
-          ?.map((param) => extractText(param.expression, src))
-          .join(', ');
-        return `d.${attribute.attribute.name}(${args ? `${args}, ` : ''}${acc})`;
+
+  // `d.builtin.*` values already carry their data type, so a builtin replaces the base type
+  // instead of wrapping it. It is applied first so that the other attributes wrap it no matter
+  // where `@builtin` appears among them.
+  const builtins = attributes.filter(
+    (attribute) => attribute.attribute.kind === '@builtin',
+  );
+  if (builtins.length > 1) {
+    throw new Error('Multiple @builtin attributes on a single declaration!');
+  }
+  const base =
+    builtins.length > 0 ? wrapInAttribute(type, builtins[0], src) : type;
+
+  // Wrapping from the last attribute outwards keeps the first attribute as the outermost call,
+  // so the nesting reads in source order. TypeGPU prepends each attribute it applies, so this
+  // also makes the generated WGSL list the attributes in source order.
+  return attributes
+    .filter((attribute) => attribute.attribute.kind !== '@builtin')
+    .reduceRight(
+      (acc, attribute) => wrapInAttribute(acc, attribute, src),
+      base,
+    );
+}
+
+function wrapInAttribute(
+  acc: string,
+  attribute: AttributeElem,
+  src: string,
+): string {
+  switch (attribute.attribute.kind) {
+    case '@attribute': {
+      const { name } = attribute.attribute;
+      const tgpuName = attributeMap.get(name);
+      if (!tgpuName) {
+        throw new Error(`Attribute @${name} is not supported by TypeGPU!`);
       }
-      case '@interpolate': {
-        if (
-          !(
-            attribute.attribute.params &&
-            [1, 2].includes(attribute.attribute.params.length)
-          )
-        ) {
-          throw new Error('Invalid interpolation parameters!');
-        }
-        const param = attribute.attribute.params
-          .map((elem) => elem.name)
-          .join(', ');
-        return `d.interpolate("${param}", ${acc})`;
-      }
-      case '@builtin': {
-        return `d.builtin.${snakeToCamel(attribute.attribute.param.name)}`;
-      }
-      case '@diagnostic':
-        throw new Error('Diagnostic attributes are not supported by TGSL!');
-      case '@if':
-      case '@elif':
-      case '@else':
-        throw new Error('Conditional attributes are not supported by TGSL!');
+      const args = attribute.attribute.params
+        ?.map((param) => extractText(param.expression, src))
+        .join(', ');
+      return `d.${tgpuName}(${args ? `${args}, ` : ''}${acc})`;
     }
-  }, type);
+    case '@interpolate': {
+      if (
+        !(
+          attribute.attribute.params &&
+          [1, 2].includes(attribute.attribute.params.length)
+        )
+      ) {
+        throw new Error('Invalid interpolation parameters!');
+      }
+      const param = attribute.attribute.params
+        .map((elem) => elem.name)
+        .join(', ');
+      return `d.interpolate("${param}", ${acc})`;
+    }
+    case '@builtin': {
+      const { name } = attribute.attribute.param;
+      if (!builtinNames.has(name)) {
+        throw new Error(`Builtin value ${name} is not supported by TypeGPU!`);
+      }
+      return `d.builtin.${snakeToCamel(name)}`;
+    }
+    case '@diagnostic':
+      throw new Error('Diagnostic attributes are not supported by TGSL!');
+    case '@if':
+    case '@elif':
+    case '@else':
+      throw new Error('Conditional attributes are not supported by TGSL!');
+  }
 }
 
 function snakeToCamel(name: string): string {
