@@ -6,7 +6,7 @@ import {
   forEachReferencedIdentifier,
   translateExpression,
 } from './expressions.ts';
-import { type EmitNames, exportBinding } from './names.ts';
+import { type EmitNames, exportBinding, lazyGetterName } from './names.ts';
 
 type ConstTranslation =
   | { ok: true; code: string }
@@ -27,11 +27,16 @@ export interface TranslatedConsts {
  * Every const that can be translated is exported, so that other modules can import it.
  * Consts that cannot be translated (e.g. `const v = vec3f(1);`) are skipped, unless an expression
  * we do need to emit references them, in which case `ctx.resolveIdentifier` throws.
+ *
+ * @param lazy set for modules in an import cycle (see `findModuleCycle`). Their declarations can be
+ *   created before the module is evaluated, so references to consts go through hoisted functions instead.
+ *   Translated consts are pure scalar expressions, so evaluating them more than once is fine.
  */
 export function translateConsts(
   constElems: ConstElem[],
   importsNamespace: Set<string>,
   names: EmitNames,
+  lazy = false,
 ): TranslatedConsts {
   const constByName = new Map(
     constElems.map((elem) => [elem.name.decl.ident.originalName, elem]),
@@ -53,7 +58,7 @@ export function translateConsts(
             `const '${name}' cannot be translated: ${translation.reason}`,
           );
         }
-        return names.local(name);
+        return lazy ? `${lazyGetterName(name)}()` : names.local(name);
       }
       if (importsNamespace.has(name)) {
         return names.local(name);
@@ -92,7 +97,11 @@ export function translateConsts(
 
     if (translation.ok) {
       // Dependencies were translated (and pushed) while translating the initializer.
-      snippets.push(exportBinding(names, name, translation.code));
+      snippets.push(
+        lazy
+          ? `function ${lazyGetterName(name)}() { return ${translation.code}; }\n${exportBinding(names, name, `${lazyGetterName(name)}()`)}`
+          : exportBinding(names, name, translation.code),
+      );
       if (elem.init) {
         forEachReferencedIdentifier(elem.init, (ref) =>
           referencedIdentifiers.add(ref),

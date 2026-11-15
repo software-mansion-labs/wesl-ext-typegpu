@@ -7,7 +7,7 @@ import type {
 
 import { forEachReferencedIdentifier } from './expressions.ts';
 import { LIBRARY_DIR } from './libraries.ts';
-import type { EmitNames } from './names.ts';
+import { type EmitNames, lazyGetterName } from './names.ts';
 import type { TypeDeclElem } from './structs.ts';
 import { asTypeRef } from './types.ts';
 import { assertDefined } from './utils.ts';
@@ -17,7 +17,7 @@ import { assertDefined } from './utils.ts';
  * `package::`/`super::` are already resolved. Modules of WESL libraries live under
  * {@link LIBRARY_DIR}, e.g. `lygia::math::Foo` => `['__wesl_lib__', 'lygia', 'math', 'Foo']`.
  */
-interface ResolvedPath {
+export interface ResolvedPath {
   kind: 'local' | 'library';
   segments: string[];
 }
@@ -27,7 +27,7 @@ interface ResolvedPath {
  * `packageRoot` is what `package::` refers to: the WESL root itself for local modules,
  * or the library's directory for modules of a WESL library.
  */
-interface ModuleLocation {
+export interface ModuleLocation {
   segments: string[];
   packageRoot: string[];
   /** Set for modules of WESL libraries, see `LibraryModule.libraryDirId` */
@@ -65,6 +65,7 @@ export function generateImportSnippets(
   constReferences: Iterable<string>,
   names: EmitNames,
   libraryDirId?: string,
+  lazyImports: Set<string> = new Set(),
 ): { snippets: string[]; libraryReferences: LibraryReference[] } {
   const { inlinedImports, directImports } = findImportsUsedInStructs(
     declElems,
@@ -72,15 +73,7 @@ export function generateImportSnippets(
     constReferences,
   );
 
-  const [root = '', ...rest] = modulePath.split('::');
-  const location: ModuleLocation =
-    root === 'package'
-      ? { segments: rest, packageRoot: [] }
-      : {
-          segments: [LIBRARY_DIR, root, ...rest],
-          packageRoot: [LIBRARY_DIR, root],
-          libraryDirId,
-        };
+  const location = moduleLocation(modulePath, libraryDirId);
 
   const { importedItems, libraryReferences } = parseImports(
     importElems,
@@ -88,6 +81,7 @@ export function generateImportSnippets(
     inlinedImports,
     location,
     names,
+    lazyImports,
   );
   return {
     snippets: [
@@ -180,14 +174,29 @@ function parseImports(
   inlinedImports: Map<string, string>,
   location: ModuleLocation,
   names: EmitNames,
+  lazyImports: Set<string>,
 ): { importedItems: ImportedItem[]; libraryReferences: LibraryReference[] } {
   const importOfAlias = generateImportMap(importElems, location);
   const importedItems: ImportedItem[] = [];
   const libraryReferences: LibraryReference[] = [];
 
-  function addImport(resolved: ResolvedPath, alias: string, usedBy: string) {
+  function addImport(
+    resolved: ResolvedPath,
+    alias: string,
+    usedBy: string,
+    name: string,
+  ) {
     const item = assertDefined(resolved.segments.at(-1));
-    importedItems.push({ path: toSpecifier(resolved, location), item, alias });
+    const path = toSpecifier(resolved, location);
+    if (lazyImports.has(name)) {
+      importedItems.push({
+        path,
+        item: lazyGetterName(item),
+        alias: lazyGetterName(alias),
+      });
+      return;
+    }
+    importedItems.push({ path, item, alias });
     if (resolved.kind === 'library') {
       libraryReferences.push({
         modulePath: resolved.segments.slice(1, -1).join('::'),
@@ -197,29 +206,87 @@ function parseImports(
     }
   }
 
-  for (const [identifier, usedBy] of directImports) {
+  for (const [name, usedBy] of [...directImports, ...inlinedImports]) {
     addImport(
-      assertDefined(importOfAlias.get(identifier)),
-      names.local(identifier),
+      assertDefined(resolveImportedName(name, importOfAlias, location)),
+      importBinding(name, names),
       usedBy,
+      name,
     );
   }
 
-  for (const [inlinedImport, usedBy] of inlinedImports) {
-    const splitInlined = inlinedImport.split('::');
-    const [first, ...rest] = splitInlined;
-    const aliased = importOfAlias.get(assertDefined(first));
-    const resolved: ResolvedPath = aliased
-      ? // the path extends an existing import
-        // e.g. 'module::item' where 'module' is imported
-        { kind: aliased.kind, segments: [...aliased.segments, ...rest] }
-      : // the path is self-contained, e.g. 'package::item'
-        resolvePath(splitInlined, location);
+  return { importedItems, libraryReferences };
+}
 
-    addImport(resolved, splitInlined.join('$'), usedBy);
+/**
+ * The JS binding an imported name is emitted as, e.g. `Struct` for an imported identifier
+ * or `package$file$Struct` for the inline path `package::file::Struct`.
+ */
+export function importBinding(name: string, names: EmitNames): string {
+  return name.includes('::') ? name.replaceAll('::', '$') : names.local(name);
+}
+
+/**
+ * Resolves a type name used in a module to the full path of the item it refers to.
+ * Handles imported identifiers (`Struct`), paths extending an import (`module::Struct`)
+ * and self-contained paths (`package::module::Struct`).
+ * Returns undefined for names that are not imported.
+ */
+export function resolveImportedName(
+  name: string,
+  importOfAlias: Map<string, ResolvedPath>,
+  location: ModuleLocation,
+): ResolvedPath | undefined {
+  const splitName = name.split('::');
+  const [first, ...rest] = splitName;
+  const aliased = importOfAlias.get(assertDefined(first));
+  if (aliased) {
+    // the name is imported directly, or extends an existing import
+    // e.g. 'module::item' where 'module' is imported
+    return { kind: aliased.kind, segments: [...aliased.segments, ...rest] };
+  }
+  if (rest.length > 0) {
+    // the path is self-contained, e.g. 'package::item'
+    return resolvePath(splitName, location);
+  }
+  return undefined;
+}
+
+export function moduleLocation(
+  modulePath: string,
+  libraryDirId?: string,
+): ModuleLocation {
+  const [root = '', ...rest] = modulePath.split('::');
+  return root === 'package'
+    ? { segments: rest, packageRoot: [] }
+    : {
+        segments: [LIBRARY_DIR, root, ...rest],
+        packageRoot: [LIBRARY_DIR, root],
+        libraryDirId,
+      };
+}
+
+/** Returns the identifiers that the import statements bring into scope */
+export function findOccupiedIdentifiers(
+  importElems: ImportElem[],
+): Set<string> {
+  const imports = new Set<string>();
+
+  function traverseImport(importElem: ImportStatement) {
+    const segment = importElem.finalSegment;
+    if (segment.kind === 'import-item') {
+      imports.add(segment.as ?? segment.name);
+    } else {
+      for (const subImport of segment.subtrees) {
+        traverseImport(subImport);
+      }
+    }
   }
 
-  return { importedItems, libraryReferences };
+  for (const elem of importElems) {
+    traverseImport(elem.imports);
+  }
+  return imports;
 }
 
 /**
@@ -292,7 +359,7 @@ function toSpecifier(resolved: ResolvedPath, location: ModuleLocation) {
  * For example, for "import package::folder::file as NestedAlias;" we get entry
  * `"NestedAlias" => { kind: 'local', segments: ['folder', 'file'] }`
  */
-function generateImportMap(
+export function generateImportMap(
   importElems: ImportElem[],
   location: ModuleLocation,
 ): Map<string, ResolvedPath> {
