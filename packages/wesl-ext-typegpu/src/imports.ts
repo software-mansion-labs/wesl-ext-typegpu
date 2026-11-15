@@ -1,23 +1,20 @@
-// @ts-check
+import type {
+  ImportElem,
+  ImportStatement,
+  StructElem,
+  TypeRefElem,
+} from 'wesl';
+import { assertDefined } from './utils.ts';
 
-import { assertDefined } from './utils.mjs';
-
-/** @typedef {import("wesl").StructElem} StructElem */
-/** @typedef {import("wesl").ImportElem} ImportElem */
-/** @typedef {import("wesl").ImportStatement} ImportStatement */
-/** @typedef {import("wesl").TypeRefElem} TypeRefElem */
-/** @typedef {{ path: string, finalSegment: string }} ImportInfo */
-
-/**
- * @param {StructElem[]} structElems
- * @param {ImportElem[]} importElems
- * @param {Set<string>} importsNamespace
- */
+interface ImportInfo {
+  path: string;
+  finalSegment: string;
+}
 export function generateImportSnippets(
-  structElems,
-  importElems,
-  importsNamespace,
-) {
+  structElems: StructElem[],
+  importElems: ImportElem[],
+  importsNamespace: Set<string>,
+): string[] {
   const { inlinedImports, directImports } = findImportsUsedInStructs(
     structElems,
     importsNamespace,
@@ -31,22 +28,18 @@ export function generateImportSnippets(
 }
 
 /**
- * @param {StructElem[]} structElements
- * @param {Set<string>} importsNamespace
  * Returns two sets of strings.
  * `directImports` contains identifiers of imported items, e.g. `struct1`.
  * `inlinedImports` contains names of inlined imports, e.g. `package::file::struct2`
  */
-function findImportsUsedInStructs(structElements, importsNamespace) {
-  /** @type {Set<string>} */
-  const directImports = new Set();
-  /** @type {Set<string>} */
-  const inlinedImports = new Set();
+function findImportsUsedInStructs(
+  structElements: StructElem[],
+  importsNamespace: Set<string>,
+): { inlinedImports: Set<string>; directImports: Set<string> } {
+  const directImports = new Set<string>();
+  const inlinedImports = new Set<string>();
 
-  /**
-   * @param {TypeRefElem} typeRef
-   */
-  function findImportsUsedInType(typeRef) {
+  function findImportsUsedInType(typeRef: TypeRefElem) {
     const name = typeRef.name.originalName;
     if (name.includes('::')) {
       inlinedImports.add(name);
@@ -70,17 +63,13 @@ function findImportsUsedInStructs(structElements, importsNamespace) {
   return { inlinedImports, directImports };
 }
 
-/**
- * @param {ImportElem[]} importElems
- * @param {Set<string>} directImports
- * @param {Set<string>} inlinedImports
- */
-function parseImports(importElems, directImports, inlinedImports) {
-  /** @type {Map<string, ImportInfo>} */
+function parseImports(
+  importElems: ImportElem[],
+  directImports: Set<string>,
+  inlinedImports: Set<string>,
+): string[] {
   const importOfAlias = generateImportMap(importElems);
-
-  /** @type {string[]} */
-  const resultImports = [];
+  const resultImports: string[] = [];
 
   for (const identifier of directImports) {
     const importInfo = assertDefined(importOfAlias.get(identifier));
@@ -121,20 +110,14 @@ function parseImports(importElems, directImports, inlinedImports) {
 }
 
 /**
- * @param {ImportElem[]} importElems
- * @returns {Map<string, ImportInfo>}
- * e.g. for "import package::folder::file as NestedAlias;" we get entry
+ * Returns an import map.
+ * For example, for "import package::folder::file as NestedAlias;" we get entry
  * `"NestedAlias" => { path: "./folder", finalSegment: "file" }`
  */
-function generateImportMap(importElems) {
-  /** @type {Map<string, ImportInfo>} */
-  const importOfAlias = new Map();
+function generateImportMap(importElems: ImportElem[]): Map<string, ImportInfo> {
+  const importOfAlias = new Map<string, ImportInfo>();
 
-  /**
-   * @param {ImportStatement} importElem
-   * @param {string} currentPath
-   */
-  function traverseImport(importElem, currentPath) {
+  function traverseImport(importElem: ImportStatement, currentPath: string) {
     const newPath =
       currentPath +
       importElem.segments
@@ -165,11 +148,10 @@ function generateImportMap(importElems) {
   return importOfAlias;
 }
 
-/**
- * @param {string} path
- * @param {string} item
- * @param {string} [alias]
- */
-function generateImport(path, item, alias) {
+function generateImport(
+  path: string,
+  item: string,
+  alias: string | undefined,
+): string {
   return `import { ${item}${alias ? ` as ${alias}` : ''} } from '${path}.wesl?typegpu';`;
 }
