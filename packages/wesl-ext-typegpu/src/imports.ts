@@ -66,6 +66,8 @@ export function generateImportSnippets(
   /** appended to the `?typegpu` query of every import, see `conditionsQuery` */
   query: string,
   lazyImports: Set<string> = new Set(),
+  /** whether the module uses the default `typegpu` export, e.g. for `tgpu.const` */
+  usesTgpu = false,
 ): { snippets: string[]; libraryReferences: LibraryReference[] } {
   const { inlinedImports, directImports } = findImportsUsedInStructs(
     declElems,
@@ -83,6 +85,11 @@ export function generateImportSnippets(
   );
   return {
     snippets: [
+      ...(usesTgpu
+        ? [
+            `import { ${names.tgpu === 'tgpu' ? 'tgpu' : `tgpu as ${names.tgpu}`} } from 'typegpu';`,
+          ]
+        : []),
       `import * as ${names.data} from 'typegpu/data';`,
       ...generateImports(importedItems, query),
     ],

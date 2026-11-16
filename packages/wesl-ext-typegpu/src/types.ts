@@ -1,7 +1,13 @@
-import type { AttributeElem, TypeRefElem, TypeTemplateParameter } from 'wesl';
+import type { AttributeElem, TypeRefElem } from 'wesl';
 
 import { TranslationError } from './errors.ts';
-import { type ExpressionContext, translateExpression } from './expressions.ts';
+import {
+  type ExpressionContext,
+  asTypeRef,
+  translateExpression,
+} from './expressions.ts';
+
+export { asTypeRef };
 
 const vecResolveMap: Record<string, string> = {
   bool: 'b',
@@ -36,28 +42,6 @@ const addressSpaceMap: Record<string, string> = {
   storage: 'ptrStorage',
   handle: 'ptrHandle',
 };
-
-/**
- * Template parameters are parsed as expressions. Plain identifiers (e.g. `f32`, `uniform`)
- * come in as references, while templated types (e.g. `array<f32, 4>`) come in as type references.
- * This normalizes both into a type reference, or returns undefined for any other expression.
- */
-export function asTypeRef(
-  param: TypeTemplateParameter | undefined,
-): TypeRefElem | undefined {
-  if (param?.kind === 'type') {
-    return param;
-  }
-  if (param?.kind === 'ref') {
-    return {
-      kind: 'type',
-      name: param.ident,
-      start: param.start,
-      end: param.end,
-    };
-  }
-  return undefined;
-}
 
 export function generateType(
   typeRef: TypeRefElem,

@@ -1,7 +1,8 @@
-import type { BatchModuleResolver } from 'wesl';
+import type { BatchModuleResolver, ConstElem } from 'wesl';
 
 import { type Conditions, validDecls } from './conditions.ts';
 import { ModuleTranslationError, formatLocation, locate } from './errors.ts';
+import { forEachReferencedIdentifier } from './expressions.ts';
 import {
   generateImportMap,
   moduleLocation,
@@ -9,7 +10,7 @@ import {
 } from './imports.ts';
 import { type TypeDeclElem, declTypeNames } from './structs.ts';
 
-/** A declaration referenced by a struct member or an alias */
+/** A declaration referenced by a struct member, an alias or a const */
 interface Dependency {
   /** module path of the referenced declaration, e.g. `package::folder::file` */
   module: string;
@@ -19,7 +20,10 @@ interface Dependency {
 }
 
 interface ModuleInfo {
-  decls: Map<string, { elem: TypeDeclElem; dependencies: Dependency[] }>;
+  decls: Map<
+    string,
+    { elem: TypeDeclElem | ConstElem; dependencies: Dependency[] }
+  >;
   /** paths of local modules that the emitted JS module imports declarations from */
   importedModules: Set<string>;
 }
@@ -39,7 +43,7 @@ export function findModuleCycle(
   modulePath: string,
   registry: BatchModuleResolver,
   conditions: Conditions,
-): { lazyImports: Set<string> } | undefined {
+): { lazyImports: Set<string>; modules: Set<string> } | undefined {
   const modules = new Map<string, ModuleInfo | undefined>();
   function getModule(path: string): ModuleInfo | undefined {
     if (!modules.has(path)) {
@@ -95,7 +99,7 @@ export function findModuleCycle(
       }
     }
   }
-  return { lazyImports };
+  return { lazyImports, modules: cycle };
 }
 
 function assertNoCrossModuleCycle(
@@ -113,10 +117,12 @@ function assertNoCrossModuleCycle(
       const members = stack.slice(onStack);
       // cycles within a single module are reported when sorting its declarations
       if (members.some((member) => member.module !== module)) {
-        const first = getModule(module)?.decls.get(name)?.elem as TypeDeclElem;
+        const first = getModule(module)?.decls.get(name)?.elem as
+          | TypeDeclElem
+          | ConstElem;
         const names = [...members, members[0]].map((member) => member.key);
         throw new ModuleTranslationError(
-          `${formatLocation(locate(first, first.start))}: Cyclic dependency between types from different modules: ${names.join(' -> ')}`,
+          `${formatLocation(locate(first.kind === 'const' ? { name: first.name.decl } : first, first.start))}: Cyclic dependency between types from different modules: ${names.join(' -> ')}`,
         );
       }
       return;
@@ -154,20 +160,23 @@ function analyzeModule(
     imports: importElems,
     structs,
     aliases,
+    consts,
   } = validDecls(ast.moduleElem, conditions);
-  const declElems: TypeDeclElem[] = [...structs, ...aliases];
+  const declElems: (TypeDeclElem | ConstElem)[] = [
+    ...structs,
+    ...aliases,
+    ...consts,
+  ];
 
   const importOfAlias = generateImportMap(importElems, location);
-  const declNames = new Set(
-    declElems.map((decl) => decl.name.ident.originalName),
-  );
+  const declNames = new Set(declElems.map(declName));
 
   const decls: ModuleInfo['decls'] = new Map();
   const importedModules = new Set<string>();
 
   for (const elem of declElems) {
     const dependencies: Dependency[] = [];
-    for (const typeName of declTypeNames(elem)) {
+    for (const typeName of referencedNames(elem)) {
       // same precedence as `generateType`: imports first, then declarations of this module
       if (importOfAlias.has(typeName) || typeName.includes('::')) {
         const resolved = resolveImportedName(typeName, importOfAlias, location);
@@ -191,8 +200,30 @@ function analyzeModule(
         });
       }
     }
-    decls.set(elem.name.ident.originalName, { elem, dependencies });
+    decls.set(declName(elem), { elem, dependencies });
   }
 
   return { decls, importedModules };
+}
+
+function declName(elem: TypeDeclElem | ConstElem): string {
+  return elem.kind === 'const'
+    ? elem.name.decl.ident.originalName
+    : elem.name.ident.originalName;
+}
+
+/** Names of the types, consts and structs (used as constructors) that a declaration refers to. */
+function referencedNames(elem: TypeDeclElem | ConstElem): Set<string> {
+  if (elem.kind !== 'const') {
+    return declTypeNames(elem);
+  }
+  const names = new Set<string>();
+  const visit = (name: string) => names.add(name);
+  if (elem.init) {
+    forEachReferencedIdentifier(elem.init, visit);
+  }
+  if (elem.name.typeRef) {
+    forEachReferencedIdentifier(elem.name.typeRef, visit);
+  }
+  return names;
 }

@@ -37,7 +37,7 @@ npm install typegpu
 npm install --save-dev wesl wesl-plugin wesl-ext-typegpu
 ```
 
-`typegpu`, `wesl` and `wesl-plugin` are peer dependencies. `typegpu` goes into your regular dependencies, since the generated code imports `typegpu/data` at runtime. The extension itself runs at build time and requires Node.js 22 or newer.
+`typegpu`, `wesl` and `wesl-plugin` are peer dependencies. `typegpu` goes into your regular dependencies, since the generated code imports `typegpu` and `typegpu/data` at runtime. The extension itself runs at build time and requires Node.js 22 or newer.
 
 ## Setup
 
@@ -82,20 +82,34 @@ The exports are currently typed as `any`, so you get no type checking or autocom
 
 ### Aliases and consts
 
-Type aliases are exported as the schema they stand for. Module-level consts are exported as JavaScript values when they can be computed from literals, other consts and arithmetic. They can also be used as array lengths and attribute arguments.
+Type aliases are exported as the schema they stand for. Module-level consts are exported as [`tgpu.const`](https://docs.swmansion.com/TypeGPU/fundamentals/variables/) declarations, so they can be used in TypeGPU shaders, and read in JavaScript through `.$`. They can hold scalars, vectors, matrices, arrays and structs, and can be built from literals, other consts, value constructors (`vec3f(...)`, `vec3(...)`, `array(...)`, `MyStruct(...)`, ...), component access (`v.xy`, `arr[1]`, `s.member`) and scalar arithmetic, comparisons and logic. Consts can also be used as array lengths and attribute arguments.
 
 ```wgsl
 const MAX_LIGHTS = 4;
+const UP = vec3f(0, 1, 0);
+const DEFAULT_LIGHT = Light(UP, 1.0);
 alias Color = vec4<f32>;
+struct Light { direction: vec3f, intensity: f32 }
 ```
 
+<!-- prettier-ignore -->
 ```ts
 // equivalent to
-export const MAX_LIGHTS = 4;
+import { tgpu } from 'typegpu';
+import * as d from 'typegpu/data';
+export const MAX_LIGHTS = tgpu.const(d.i32, 4).$name('MAX_LIGHTS');
+export const UP = tgpu.const(d.vec3f, d.vec3f(0, 1, 0)).$name('UP');
 export const Color = d.vec4f;
+export const Light = d.struct({
+  direction: d.vec3f,
+  intensity: d.f32,
+}).$name('Light');
+export const DEFAULT_LIGHT = tgpu.const(Light, Light({ direction: UP.$, intensity: 1 })).$name('DEFAULT_LIGHT');
 ```
 
-Consts that can't be translated (e.g. `const UP = vec3f(0, 1, 0);`) are left out. A struct that uses one in an array length or attribute can't be translated either (see [Errors](#errors)).
+Types are inferred the way WGSL does it, also for consts and structs imported from other modules. Abstract values (`4`, `vec3(1, 2, 3)`) take the type of what they're used as, and otherwise become `i32` / `f32`, since TypeGPU can't declare consts of abstract types.
+
+Consts that can't be translated (e.g. `const SUM = vec3f(1) + vec3f(2);` or `const M = max(1, 2);`) are left out. A struct that uses one in an array length or attribute can't be translated either (see [Errors](#errors)).
 
 ### Types from other modules
 
@@ -128,7 +142,7 @@ import * as d from 'typegpu/data';
 import { Light, MAX_LIGHTS } from '../common.wesl?typegpu';
 export const Scene = d.struct({
   sun: Light,
-  lights: d.arrayOf(Light, MAX_LIGHTS),
+  lights: d.arrayOf(Light, MAX_LIGHTS.$),
 }).$name('Scene');
 ```
 
@@ -201,7 +215,7 @@ Structs that depend on a broken one are broken too, and their message names the 
 | `ptr<space, T, mode>`              | `d.ptrUniform(T)`, `d.ptrStorage(T, mode)`, ... |                                                                          |
 | `struct`                           | `d.struct({ ... })`                             |                                                                          |
 | `alias`                            | the aliased schema                              |                                                                          |
-| `const`                            | a JS value                                      | Literals, other consts and arithmetic                                    |
+| `const`                            | `tgpu.const(T, value)`                          | Scalars, vectors, matrices, arrays and structs                           |
 | `@align(n)`, `@size(n)`            | `d.align(n, T)`, `d.size(n, T)`                 | `n` can use consts and arithmetic                                        |
 | `@location(n)`                     | `d.location(n, T)`                              |                                                                          |
 | `@interpolate(...)`                | `d.interpolate('...', T)`                       | One or two parameters                                                    |
@@ -213,7 +227,7 @@ Structs that depend on a broken one are broken too, and their message names the 
 
 - The exports of `?typegpu` modules are typed as `any`.
 - Attributes and builtins without a TypeGPU counterpart (`@diagnostic`, `@blend_src`, ...) make the struct untranslatable.
-- Array lengths and attribute arguments can't call functions (`max(1, 2)`) or use `override` declarations.
+- Consts, array lengths and attribute arguments can't call functions (`max(1, 2)`) or use `override` declarations, and consts can't use arithmetic on vectors and matrices.
 - Non-square and `f16` matrices aren't supported, since TypeGPU doesn't have them.
 - Type names the extension doesn't recognise are emitted as `d.<name>` without a check, so a misspelled type shows up as `undefined` at runtime rather than at build time.
 - Imports with conditions need the extra `declare module` shown in [Conditions](#conditions).
