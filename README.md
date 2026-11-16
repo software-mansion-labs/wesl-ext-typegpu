@@ -186,11 +186,7 @@ import { Material } from '../shaders/material.wesl?typegpu'; // albedo only
 import { Material as DebugMaterial } from '../shaders/material.wesl?DEBUG&typegpu'; // albedo and debugColor
 ```
 
-The `wesl-ext-typegpu/suffixes` types only cover imports ending in `?typegpu`. For imports with conditions, add your own declaration:
-
-```ts
-declare module '*&typegpu';
-```
+Put conditions before `typegpu` in the query (`?DEBUG&typegpu`), so `wesl-ext-typegpu/suffixes` covers the import. `?typegpu&DEBUG` builds too, but TypeScript can't match it.
 
 ### Errors
 
@@ -230,7 +226,7 @@ Structs that depend on a broken one are broken too, and their message names the 
 - Consts, array lengths and attribute arguments can't call functions (`max(1, 2)`) or use `override` declarations, and consts can't use arithmetic on vectors and matrices.
 - Non-square and `f16` matrices aren't supported, since TypeGPU doesn't have them.
 - Type names the extension doesn't recognise are emitted as `d.<name>` without a check, so a misspelled type shows up as `undefined` at runtime rather than at build time.
-- Imports with conditions need the extra `declare module` shown in [Conditions](#conditions).
+- Imports with conditions only typecheck when `typegpu` is the last segment of the query (`?DEBUG&typegpu`, not `?typegpu&DEBUG`), since TypeScript module patterns allow a single `*`. See [Conditions](#conditions).
 - wesl 0.7 can't parse inline type paths with more than one `super::` (`super::super::common::Light`). Import the type with an `import` statement instead.
 - Import cycles between modules of a WESL library aren't handled.
 

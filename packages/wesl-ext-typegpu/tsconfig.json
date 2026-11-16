@@ -2,5 +2,7 @@
   "extends": ["../../tsconfig.base.jsonc"],
   "compilerOptions": {
     "lib": ["ESNext"]
-  }
+  },
+  // The fixtures have their own tsconfig files.
+  "exclude": ["dist", "node_modules", "test/fixtures"]
 }

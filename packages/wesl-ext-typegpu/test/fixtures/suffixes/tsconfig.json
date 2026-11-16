@@ -1,0 +1,5 @@
+{
+  "extends": ["../../../../../tsconfig.base.jsonc"],
+  "files": ["../../../suffixes.d.ts", "imports.ts"],
+  "include": []
+}
