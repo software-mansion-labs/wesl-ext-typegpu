@@ -328,10 +328,8 @@ function wrapInAttribute(
     case '@if':
     case '@elif':
     case '@else':
-      throw new TranslationError(
-        'Conditional attributes are not supported by TypeGPU',
-        attribute,
-      );
+      // Conditions are evaluated before translation, so anything still carrying one is included.
+      return acc;
   }
 }
 

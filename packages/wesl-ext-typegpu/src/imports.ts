@@ -63,6 +63,8 @@ export function generateImportSnippets(
   location: ModuleLocation,
   constReferences: Iterable<string>,
   names: EmitNames,
+  /** appended to the `?typegpu` query of every import, see `conditionsQuery` */
+  query: string,
   lazyImports: Set<string> = new Set(),
 ): { snippets: string[]; libraryReferences: LibraryReference[] } {
   const { inlinedImports, directImports } = findImportsUsedInStructs(
@@ -82,7 +84,7 @@ export function generateImportSnippets(
   return {
     snippets: [
       `import * as ${names.data} from 'typegpu/data';`,
-      ...generateImports(importedItems),
+      ...generateImports(importedItems, query),
     ],
     libraryReferences,
   };
@@ -368,7 +370,10 @@ export function generateImportMap(
  * Generates one import statement per module, with the modules and the items
  * within each statement sorted, so the output is stable.
  */
-function generateImports(importedItems: ImportedItem[]): string[] {
+function generateImports(
+  importedItems: ImportedItem[],
+  query: string,
+): string[] {
   const specifiersOfPath = new Map<string, Set<string>>();
   for (const { path, item, alias } of importedItems) {
     const specifiers = specifiersOfPath.get(path) ?? new Set<string>();
@@ -380,7 +385,7 @@ function generateImports(importedItems: ImportedItem[]): string[] {
     .sort(([a], [b]) => compare(a, b))
     .map(([path, specifiers]) => {
       const sorted = [...specifiers].sort(compare);
-      return `import { ${sorted.join(', ')} } from '${path}.wesl?typegpu';`;
+      return `import { ${sorted.join(', ')} } from '${path}.wesl?typegpu${query}';`;
     });
 }
 
