@@ -1,6 +1,6 @@
 # wesl-ext-typegpu
 
-An extension for [wesl-plugin](https://github.com/wgsl-tooling-wg/wesl-js) that turns the structs of a [WESL](https://wesl-lang.dev) module into [TypeGPU](https://typegpu.com) schemas. Import a shader file with the `?typegpu` suffix, and you get one `d.struct` per struct in that file, ready to use for buffers, vertex layouts and so on. The WGSL stays the single source of truth for your data layout.
+An extension for [wesl-plugin](https://github.com/wgsl-tooling-wg/wesl-js) that turns the structs of a [WESL](https://wesl-lang.dev) module into [TypeGPU](https://typegpu.com) schemas. Import a shader file with the `?typegpu` suffix, and you get one `d.struct` per struct in that file (plus its aliases and consts), ready to use for buffers, vertex layouts and so on. The WGSL stays the single source of truth for your data layout.
 
 ```wgsl
 // shaders/particles.wesl
@@ -17,15 +17,14 @@ import { Particle } from '../shaders/particles.wesl?typegpu';
 
 The import above resolves to a module equivalent to this:
 
+<!-- prettier-ignore -->
 ```ts
 import * as d from 'typegpu/data';
-export const Particle = d
-  .struct({
-    position: d.vec3f,
-    velocity: d.vec3f,
-    color: d.vec4f,
-  })
-  .$name('Particle');
+export const Particle = d.struct({
+  position: d.vec3f,
+  velocity: d.vec3f,
+  color: d.vec4f,
+}).$name('Particle');
 ```
 
 > [!NOTE]
@@ -38,7 +37,7 @@ npm install typegpu
 npm install --save-dev wesl wesl-plugin wesl-ext-typegpu
 ```
 
-`wesl` and `wesl-plugin` are peer dependencies. `typegpu` is not a dependency of the extension itself, but the generated code imports `typegpu/data`, so your app needs it. The extension runs at build time and requires Node.js 22 or newer.
+`typegpu`, `wesl` and `wesl-plugin` are peer dependencies. `typegpu` goes into your regular dependencies, since the generated code imports `typegpu/data` at runtime. The extension itself runs at build time and requires Node.js 22 or newer.
 
 ## Setup
 
@@ -81,12 +80,31 @@ const particleBuffer = root.createBuffer(Particle).$usage('storage');
 
 The exports are currently typed as `any`, so you get no type checking or autocompletion on them.
 
-### Structs from other modules
+### Aliases and consts
 
-If a struct uses a struct imported from another module of your shader package, the generated code imports that struct from the other module's `?typegpu` version.
+Type aliases are exported as the schema they stand for. Module-level consts are exported as JavaScript values when they can be computed from literals, other consts and arithmetic. They can also be used as array lengths and attribute arguments.
+
+```wgsl
+const MAX_LIGHTS = 4;
+alias Color = vec4<f32>;
+```
+
+```ts
+// equivalent to
+export const MAX_LIGHTS = 4;
+export const Color = d.vec4f;
+```
+
+Consts that can't be translated (e.g. `const UP = vec3f(0, 1, 0);`) are left out. A struct that uses one in an array length or attribute can't be translated either (see [Errors](#errors)).
+
+### Types from other modules
+
+If a struct uses a struct, alias or const imported from another module, the generated code imports it from the other module's `?typegpu` version. This works from any directory, with `package::` and `super::` paths, `as` aliases, import trees and inline paths such as `package::common::Light` used directly as a field type.
 
 ```wgsl
 // shaders/common.wesl
+const MAX_LIGHTS = 4;
+
 struct Light {
   direction: vec3f,
   intensity: f32,
@@ -94,33 +112,33 @@ struct Light {
 ```
 
 ```wgsl
-// shaders/scene.wesl
-import package::common::Light;
+// shaders/scene/forest.wesl
+import package::common::{Light, MAX_LIGHTS};
 
 struct Scene {
   sun: Light,
-  lights: array<Light, 4>,
+  lights: array<Light, MAX_LIGHTS>,
 }
 ```
 
+<!-- prettier-ignore -->
 ```ts
-// `scene.wesl?typegpu`, equivalent to
+// `scene/forest.wesl?typegpu`, equivalent to
 import * as d from 'typegpu/data';
-
-import { Light } from './common.wesl?typegpu';
-export const Scene = d
-  .struct({
-    sun: Light,
-    lights: d.arrayOf(Light, 4),
-  })
-  .$name('Scene');
+import { Light, MAX_LIGHTS } from '../common.wesl?typegpu';
+export const Scene = d.struct({
+  sun: Light,
+  lights: d.arrayOf(Light, MAX_LIGHTS),
+}).$name('Scene');
 ```
 
-Imports in the shader that no struct uses (functions, unused structs) don't show up in the output. Inline paths such as `package::common::Light` used directly as a field type work too.
+Imports in the shader that nothing uses (functions, unused structs) don't show up in the output. Two modules may import from each other; such modules are emitted with lazy getters, so the order in which they're evaluated doesn't matter.
+
+Types from WESL libraries (npm packages that wesl-plugin links, e.g. `import some_lib::math::Foo;`) can be imported the same way. The extension finds the library's module and emits its schemas too.
 
 ### Runtime-sized structs
 
-A struct whose last member is a runtime-sized array (`array<T>` without a length) is exported as a function that takes the array length and returns the schema.
+A struct whose last member is a runtime-sized array (`array<T>` without a length) is exported as a function that takes the array length and returns the schema. The same goes for an alias of a runtime-sized array.
 
 ```wgsl
 // shaders/particles.wesl
@@ -137,38 +155,70 @@ const ParticlesOf1000 = Particles(1000);
 const buffer = root.createBuffer(ParticlesOf1000).$usage('storage');
 ```
 
+### Conditions
+
+`@if`, `@elif` and `@else` are evaluated like the linker does. Conditions come from the import query (the wesl-plugin syntax), and an unset condition is false. They're forwarded to the modules the generated code imports from.
+
+```wgsl
+// shaders/material.wesl
+struct Material {
+  albedo: vec3f,
+  @if(DEBUG) debugColor: vec4f,
+}
+```
+
+```ts
+import { Material } from '../shaders/material.wesl?typegpu'; // albedo only
+import { Material as DebugMaterial } from '../shaders/material.wesl?DEBUG&typegpu'; // albedo and debugColor
+```
+
+The `wesl-ext-typegpu/suffixes` types only cover imports ending in `?typegpu`. For imports with conditions, add your own declaration:
+
+```ts
+declare module '*&typegpu';
+```
+
+### Errors
+
+A struct or alias that can't be translated doesn't fail the whole import. It's exported as a placeholder that throws when used, and the build prints a warning that points at the source:
+
+```
+[wesl-ext-typegpu] ./broken.wesl:6:6: Cannot translate struct 'Broken', member 'a': Matrix type 'mat2x3f' is not supported by TypeGPU, supported matrix types are: mat2x2f, mat3x3f, mat4x4f in 'mat2x3f'
+```
+
+Structs that depend on a broken one are broken too, and their message names the root cause. Problems with the module as a whole fail the import: a module that can't be resolved, types that contain each other, or a missing library.
+
 ## What is supported
 
-| WGSL                               | TypeGPU                                         | Notes                                                                      |
-| ---------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------- |
-| `f32`, `f16`, `i32`, `u32`, `bool` | `d.f32`, `d.f16`, `d.i32`, `d.u32`, `d.bool`    |                                                                            |
-| `vec3f`, `vec2<i32>`, ...          | `d.vec3f`, `d.vec2i`, ...                       | Shorthand and templated forms, for `f32`, `f16`, `i32`, `u32` and `bool`   |
-| `mat2x2f`, `mat3x3f`, `mat4x4f`    | `d.mat2x2f`, `d.mat3x3f`, `d.mat4x4f`           | Shorthand form only. TypeGPU has no non-square or `f16` matrices           |
-| `array<T, N>`                      | `d.arrayOf(T, N)`                               | `N` must be a literal                                                      |
-| `array<T>`                         | `d.arrayOf(T, n)`                               | Last member only; the struct becomes a function of `n`                     |
-| `atomic<T>`                        | `d.atomic(T)`                                   |                                                                            |
-| `ptr<space, T, mode>`              | `d.ptrUniform(T)`, `d.ptrStorage(T, mode)`, ... |                                                                            |
-| Structs                            | `d.struct({ ... })`                             | From the same module or imported from another module of the package        |
-| `@align(n)`                        | `d.align(n, T)`                                 | `n` must be a literal                                                      |
-| `@size(n)`                         | `d.size(n, T)`                                  | `n` must be a literal                                                      |
-| `@location(n)`                     | `d.location(n, T)`                              |                                                                            |
-| `@interpolate(...)`                | `d.interpolate('...', T)`                       | One or two parameters                                                      |
-| `@builtin(name)`                   | `d.builtin.name`                                | Snake case is converted to camel case, e.g. `vertex_index` → `vertexIndex` |
-
-Struct imports work with `package::` paths, `as` aliases, one-level import trees (`package::a::{B, C}`) and inline paths in field types, as long as the importing module sits at the root of the shader directory. See the limitations below.
+| WGSL                               | TypeGPU                                         | Notes                                                                    |
+| ---------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------ |
+| `f32`, `f16`, `i32`, `u32`, `bool` | `d.f32`, `d.f16`, `d.i32`, `d.u32`, `d.bool`    |                                                                          |
+| `vec3f`, `vec2<i32>`, ...          | `d.vec3f`, `d.vec2i`, ...                       | Shorthand and templated forms, for `f32`, `f16`, `i32`, `u32` and `bool` |
+| `mat4x4f`, `mat4x4<f32>`, ...      | `d.mat4x4f`, ...                                | `mat2x2`, `mat3x3` and `mat4x4` of `f32`, the matrices TypeGPU has       |
+| `array<T, N>`                      | `d.arrayOf(T, N)`                               | `N` can use consts and arithmetic                                        |
+| `array<T>`                         | `d.arrayOf(T, n)`                               | Last member only; the struct becomes a function of `n`                   |
+| `atomic<T>`                        | `d.atomic(T)`                                   |                                                                          |
+| `ptr<space, T, mode>`              | `d.ptrUniform(T)`, `d.ptrStorage(T, mode)`, ... |                                                                          |
+| `struct`                           | `d.struct({ ... })`                             |                                                                          |
+| `alias`                            | the aliased schema                              |                                                                          |
+| `const`                            | a JS value                                      | Literals, other consts and arithmetic                                    |
+| `@align(n)`, `@size(n)`            | `d.align(n, T)`, `d.size(n, T)`                 | `n` can use consts and arithmetic                                        |
+| `@location(n)`                     | `d.location(n, T)`                              |                                                                          |
+| `@interpolate(...)`                | `d.interpolate('...', T)`                       | One or two parameters                                                    |
+| `@builtin(name)`                   | `d.builtin.name`                                | Snake case becomes camel case, e.g. `vertex_index` → `vertexIndex`       |
+| `@invariant`                       | `d.invariant(T)`                                |                                                                          |
+| `@if`, `@elif`, `@else`            | members and declarations left in or out         | On structs, members, aliases, consts and imports                         |
 
 ## Known limitations
 
 - The exports of `?typegpu` modules are typed as `any`.
-- Only the attributes in the table above are handled. `@diagnostic` and conditional attributes (`@if`, `@elif`, `@else`) make the import fail.
-- `@builtin` replaces the member's whole type, so other attributes on the same member are dropped.
-- Array lengths and attribute arguments are copied into JavaScript as written. Constants such as `array<f32, COUNT>` don't work; use literals.
-- Templated matrix types (`mat4x4<f32>`) are not supported; use the shorthand (`mat4x4f`).
-- Type aliases (`alias`) are not supported.
-- Import paths are only resolved correctly in modules at the root of the shader directory. In nested modules, `package::` paths are resolved relative to the module's own directory. `super::` paths point one directory too high, and nested import trees (`package::{a::B}`) lose their separators.
-- Structs from WESL libraries (dependencies other than your own `package`) can't be imported.
-- Two modules that import structs from each other are not supported.
-- A struct named `d` collides with the `typegpu/data` namespace import in the generated code.
+- Attributes and builtins without a TypeGPU counterpart (`@diagnostic`, `@blend_src`, ...) make the struct untranslatable.
+- Array lengths and attribute arguments can't call functions (`max(1, 2)`) or use `override` declarations.
+- Non-square and `f16` matrices aren't supported, since TypeGPU doesn't have them.
+- Type names the extension doesn't recognise are emitted as `d.<name>` without a check, so a misspelled type shows up as `undefined` at runtime rather than at build time.
+- Imports with conditions need the extra `declare module` shown in [Conditions](#conditions).
+- wesl 0.7 can't parse inline type paths with more than one `super::` (`super::super::common::Light`). Import the type with an `import` statement instead.
+- Import cycles between modules of a WESL library aren't handled.
 
 ## TypeGPU is created by Software Mansion
 
