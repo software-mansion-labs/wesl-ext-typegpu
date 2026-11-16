@@ -4,10 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "typecheck": "tsc",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "dev": "vp dev",
+    "build": "vp build",
+    "preview": "vp preview"
   },
   "packageManager": "pnpm@10.6.3+sha512.bb45e34d50a9a76e858a95837301bfb6bd6d35aea2c5d52094fa497a467c43f5c440103ce2511e9e0a2f89c3d6071baac3358fc68ac6fb75e2ceb3d2736065e6",
   "devDependencies": {
@@ -16,7 +15,8 @@
     "vite": "catalog:",
     "wesl": "^0.7.31",
     "wesl-plugin": "^0.6.81",
-    "wesl-ext-typegpu": "workspace:*"
+    "wesl-ext-typegpu": "workspace:*",
+    "vite-plus": "catalog:"
   },
   "dependencies": {
     "typegpu": "catalog:"

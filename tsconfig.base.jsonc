@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     /* Language and Environment */
-    // Node 22 baseline. Only used for type checking, tsdown does the actual emit.
+    // Node 22 baseline. Only used for type checking, `vp pack` does the actual emit.
     "target": "ES2024",
     "lib": ["ESNext"],
 

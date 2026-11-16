@@ -5,17 +5,14 @@
   "license": "MIT",
   "packageManager": "pnpm@10.6.3+sha512.bb45e34d50a9a76e858a95837301bfb6bd6d35aea2c5d52094fa497a467c43f5c440103ce2511e9e0a2f89c3d6071baac3358fc68ac6fb75e2ceb3d2736065e6",
   "scripts": {
-    "dev": "pnpm run --filter example-app dev",
-    "fix": "oxlint --fix && oxfmt",
-    "test": "pnpm run --recursive --if-present test && pnpm run test:scripts",
-    "test:scripts": "vitest run --root scripts",
-    "test:style": "oxlint && oxfmt --check",
-    "typecheck": "pnpm run --recursive --if-present typecheck"
+    "dev": "vp run example-app#dev",
+    "fix": "vp check --fix",
+    "test": "vp run --filter './packages/*' test && vp run test:scripts",
+    "test:scripts": "vp test run --root scripts",
+    "test:style": "vp check"
   },
   "devDependencies": {
-    "oxfmt": "^0.78.0",
-    "oxlint": "^1.93.0",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vite-plus": "catalog:"
   }
 }

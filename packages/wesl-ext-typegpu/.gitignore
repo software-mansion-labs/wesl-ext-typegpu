@@ -1,3 +1,4 @@
 # Copied from the repository root by `prepack` (scripts/copyPublishFiles.mjs)
 README.md
 LICENSE.md
+.vitest/

@@ -13,7 +13,7 @@ import {
   it,
   type MockInstance,
   vi,
-} from 'vitest';
+} from 'vite-plus/test';
 import { link, RecordResolver, type WeslBundle } from 'wesl';
 import type { PluginExtensionApi } from 'wesl-plugin';
 
@@ -1278,6 +1278,7 @@ function evaluate(code: string): Record<string, unknown> {
           : `d.${String(key)}`,
     },
   );
+  // oxlint-disable-next-line typescript/no-implied-eval -- evaluating the emitted module is the point of this helper
   return new Function('d', `${body}\nreturn { ${names.join(', ')} };`)(d);
 }
 
@@ -1310,6 +1311,7 @@ struct X {
     expect(() => X.someProperty).toThrow(message);
     expect(() => X()).toThrow(message);
     expect(() => Object.keys(X)).toThrow(message);
+    // oxlint-disable-next-line typescript/no-misused-spread -- spreading the unresolved struct is exactly what should throw
     expect(() => ({ ...X })).toThrow(message);
   });
 
