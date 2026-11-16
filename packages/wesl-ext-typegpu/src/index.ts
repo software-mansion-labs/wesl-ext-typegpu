@@ -16,6 +16,7 @@ import {
   resolveLibraryModule,
 } from './libraries.ts';
 import { createEmitNames } from './names.ts';
+import { ModuleGraph, createModuleScope } from './scope.ts';
 import { generateStructSnippets } from './structs.ts';
 
 export const typegpuExtension: {
@@ -52,19 +53,23 @@ async function emitReflectJs(
     ...consts.map((elem) => elem.name.decl.ident.originalName),
   ]);
 
+  const registry = await api.weslRegistry();
   // Modules of WESL libraries can't import from the user's modules, and cycles within a library aren't handled (yet).
-  const lazyImports =
+  const cycle =
     libraryDirId === undefined
-      ? findModuleCycle(moduleName, await api.weslRegistry(), conditions)
-          ?.lazyImports
+      ? findModuleCycle(moduleName, registry, conditions)
       : undefined;
+  const lazyImports = cycle?.lazyImports;
 
-  const translatedConsts = translateConsts(
-    consts,
-    importsNamespace,
-    names,
-    lazyImports !== undefined,
-  );
+  const graph = new ModuleGraph(registry, conditions);
+  const scope = createModuleScope(moduleName, ast, conditions, libraryDirId);
+  graph.addScope(scope);
+  await graph.preloadLibraries(scope, async (modulePath) => {
+    const { tomlDir } = await api.weslToml();
+    return resolveLibraryModule(modulePath, tomlDir);
+  });
+
+  const translatedConsts = translateConsts(scope, graph, names, cycle);
   const {
     snippets: structSnippets,
     translated,
@@ -75,6 +80,10 @@ async function emitReflectJs(
     translatedConsts.ctx,
     lazyImports,
   );
+  // Consts created from structs that cannot be translated are skipped, since the placeholders throw when used.
+  const emittedConsts = translatedConsts.emit(
+    new Set(errors.map((error) => error.declName)),
+  );
 
   // Declarations that failed to translate are emitted as throwing placeholders, so they don't need any imports.
   // This also keeps a broken declaration from pulling in an import that can't be resolved.
@@ -84,10 +93,11 @@ async function emitReflectJs(
       importOfAlias,
       importsNamespace,
       location,
-      translatedConsts.referencedIdentifiers,
+      emittedConsts.referencedIdentifiers,
       names,
       conditionsQuery(conditions),
-      lazyImports,
+      lazyImports && lazyImports.union(emittedConsts.lazyImports),
+      emittedConsts.early.length + emittedConsts.late.length > 0,
     );
   await checkLibraryReferences(libraryReferences, api, conditions);
 
@@ -98,8 +108,9 @@ async function emitReflectJs(
 
   const src = [
     ...importSnippets,
-    ...translatedConsts.snippets,
+    ...emittedConsts.early,
     ...structSnippets,
+    ...emittedConsts.late,
   ].join('\n');
 
   return src;

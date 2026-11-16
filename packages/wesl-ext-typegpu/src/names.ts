@@ -62,6 +62,8 @@ export interface EmitNames {
   data: string;
   /** Parameter name of the length of a runtime-sized array, `__arrayLength` unless that is taken. */
   arrayLength: string;
+  /** Local name of the default `typegpu` import, `tgpu` unless that is taken. */
+  tgpu: string;
   /** Local JS binding for a WESL identifier (declaration name or import alias). */
   local(identifier: string): string;
 }
@@ -90,6 +92,7 @@ export function createEmitNames(identifiers: Iterable<string>): EmitNames {
 
   const data = claim('d');
   const arrayLength = claim('__arrayLength');
+  const tgpu = claim('tgpu');
 
   const renamed = new Map<string, string>();
   for (const name of identifierSet) {
@@ -101,6 +104,7 @@ export function createEmitNames(identifiers: Iterable<string>): EmitNames {
   return {
     data,
     arrayLength,
+    tgpu,
     local: (identifier) => renamed.get(identifier) ?? identifier,
   };
 }

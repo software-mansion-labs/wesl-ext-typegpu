@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 
+import tgpu, { d } from 'typegpu';
 import { parseSync } from 'vite';
 import {
   afterEach,
@@ -545,12 +546,13 @@ describe('expressions', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data';
-      export const MAX_COUNT = 4;
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const MAX_COUNT = tgpu.const(d.i32, 4).$name("MAX_COUNT");
       export const X = d.struct({
-        a: d.arrayOf(d.f32, MAX_COUNT),
+        a: d.arrayOf(d.f32, MAX_COUNT.$),
         b: d.arrayOf(d.f32, 4),
-        c: d.align(MAX_COUNT, d.f32),
+        c: d.align(MAX_COUNT.$, d.f32),
         d: d.location(1, d.f32),
         e: d.arrayOf(d.f32, 0x10)
       }).$name("X");"
@@ -571,12 +573,13 @@ describe('expressions', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data';
-      export const N = 3;
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const N = tgpu.const(d.i32, 3).$name("N");
       export const X = d.struct({
-        a: d.arrayOf(d.f32, (N + 1) * 2 - -1),
+        a: d.arrayOf(d.f32, (N.$ + 1) * 2 - -1),
         b: d.arrayOf(d.f32, Math.trunc(7 / 2)),
-        c: d.arrayOf(d.f32, (N << 1) | 1),
+        c: d.arrayOf(d.f32, (N.$ << 1) | 1),
         d: d.arrayOf(d.f32, ~(-8) % 5)
       }).$name("X");"
     `);
@@ -601,19 +604,20 @@ describe('expressions', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data';
-      export const DEC_INT = 12;
-      export const I32 = 3;
-      export const U32 = 4;
-      export const HEX_INT = 0x1F;
-      export const FLOAT = 2;
-      export const HALF = 1;
-      export const DOT_FLOAT = 1;
-      export const LEADING_DOT = 0.5;
-      export const EXPONENT = 1000;
-      export const HEX_FLOAT = 3;
-      export const HEX_FLOAT_SUFFIX = 5;
-      export const BOOL = true;"
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const DEC_INT = tgpu.const(d.i32, 12).$name("DEC_INT");
+      export const I32 = tgpu.const(d.i32, 3).$name("I32");
+      export const U32 = tgpu.const(d.u32, 4).$name("U32");
+      export const HEX_INT = tgpu.const(d.u32, 0x1F).$name("HEX_INT");
+      export const FLOAT = tgpu.const(d.f32, 2).$name("FLOAT");
+      export const HALF = tgpu.const(d.f16, 1).$name("HALF");
+      export const DOT_FLOAT = tgpu.const(d.f32, 1).$name("DOT_FLOAT");
+      export const LEADING_DOT = tgpu.const(d.f32, 0.5).$name("LEADING_DOT");
+      export const EXPONENT = tgpu.const(d.f32, 1000).$name("EXPONENT");
+      export const HEX_FLOAT = tgpu.const(d.f32, 3).$name("HEX_FLOAT");
+      export const HEX_FLOAT_SUFFIX = tgpu.const(d.f16, 5).$name("HEX_FLOAT_SUFFIX");
+      export const BOOL = tgpu.const(d.bool, true).$name("BOOL");"
     `);
   });
 
@@ -622,17 +626,18 @@ describe('expressions', () => {
       await emit({
         'main.wesl': `
           const DOUBLED = BASE * 2;
-          const UNUSED_VECTOR = vec3f(1.0);
+          const UNUSED_CALL = max(1, 2);
           const BASE = 3;
           struct X { a: array<f32, DOUBLED> }
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data';
-      export const BASE = 3;
-      export const DOUBLED = BASE * 2;
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const BASE = tgpu.const(d.i32, 3).$name("BASE");
+      export const DOUBLED = tgpu.const(d.i32, BASE.$ * 2).$name("DOUBLED");
       export const X = d.struct({
-        a: d.arrayOf(d.f32, DOUBLED)
+        a: d.arrayOf(d.f32, DOUBLED.$)
       }).$name("X");"
     `);
   });
@@ -693,9 +698,10 @@ describe('expressions', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data';
-      export const N = 2;
-      export const Arr = d.arrayOf(d.f32, N * 2);"
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const N = tgpu.const(d.u32, 2).$name("N");
+      export const Arr = d.arrayOf(d.f32, N.$ * 2);"
     `);
     expect(
       await untranslatableMessage(
@@ -727,23 +733,392 @@ describe('expressions', () => {
       `,
     };
     expect(await emit(sources)).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data';
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
       import { ALIGN, BASE, INLINE as package$consts$INLINE, SIZE } from './consts.wesl?typegpu';
-      export const LOCAL = BASE + 1;
+      export const LOCAL = tgpu.const(d.i32, BASE.$ + 1).$name("LOCAL");
       export const X = d.struct({
-        a: d.arrayOf(d.f32, SIZE),
-        b: d.align(ALIGN, d.f32),
-        c: d.arrayOf(d.f32, LOCAL),
-        d: d.arrayOf(d.f32, package$consts$INLINE * 2)
+        a: d.arrayOf(d.f32, SIZE.$),
+        b: d.align(ALIGN.$, d.f32),
+        c: d.arrayOf(d.f32, LOCAL.$),
+        d: d.arrayOf(d.f32, package$consts$INLINE.$ * 2)
       }).$name("X");"
     `);
     expect(await emit(sources, 'consts.wesl')).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data';
-      export const SIZE = 4;
-      export const ALIGN = SIZE * 4;
-      export const BASE = 2;
-      export const INLINE = 8;"
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const SIZE = tgpu.const(d.u32, 4).$name("SIZE");
+      export const ALIGN = tgpu.const(d.u32, SIZE.$ * 4).$name("ALIGN");
+      export const BASE = tgpu.const(d.i32, 2).$name("BASE");
+      export const INLINE = tgpu.const(d.i32, 8).$name("INLINE");"
     `);
+  });
+});
+
+/**
+ * Evaluates the consts emitted for a module without imports of other modules, using the real TypeGPU,
+ * and resolves them into WGSL.
+ */
+function resolveConsts(code: string): string {
+  const names = [...code.matchAll(/^export const (\w+)/gm)].map((m) => m[1]);
+  const body = code
+    .split('\n')
+    .filter((line) => !line.startsWith('import '))
+    .join('\n')
+    .replaceAll('export const', 'const');
+  // oxlint-disable-next-line typescript/no-implied-eval -- evaluating the emitted module is the point of this helper
+  const exports = new Function(
+    'tgpu',
+    'd',
+    `${body}\nreturn { ${names.join(', ')} };`,
+  )(tgpu, d) as Record<string, object>;
+  const consts = Object.fromEntries(
+    Object.entries(exports).filter(
+      ([, value]) =>
+        (value as { resourceType?: string }).resourceType === 'const',
+    ),
+  );
+  return tgpu.resolve({
+    externals: consts,
+    template: `\n${Object.keys(consts)
+      .map((name) => `const _${name} = ${name};`)
+      .join('\n')}`,
+  });
+}
+
+describe('aggregate consts', () => {
+  it('translates vectors, matrices and arrays', async () => {
+    const code = await emit({
+      'main.wesl': `
+        const V = vec3f(1, 2, 3);
+        const ABSTRACT = vec3(1, 2, 3);
+        const TYPED: vec3f = vec3(1, 2, 3);
+        const MIXED = vec4<u32>(1u, vec2(2, 3), 4);
+        const SPLAT = vec4(0.5);
+        const BOOLS = vec2<bool>(true, false);
+        const CONVERTED = vec3f(ABSTRACT);
+        const M = mat2x2f(1, 2, 3, 4);
+        const COLUMNS = mat3x3(vec3(1, 0, 0), vec3(0, 1, 0), vec3(0., 0, 1));
+        const ZERO = mat4x4f();
+        const INFERRED = array(1, 2, 3);
+        const FLOATS = array<f32, 3>(1, 2, 3);
+        const VECS: array<vec2f, 2> = array(vec2(1, 2), vec2(3, 4));
+        const NESTED = array(array(1, 2), array(3, 4));
+        const N = 2u;
+        const ZEROS = array<vec2f, N>();
+      `,
+    });
+    expect(code).toMatchInlineSnapshot(`
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const V = tgpu.const(d.vec3f, d.vec3f(1, 2, 3)).$name("V");
+      export const ABSTRACT = tgpu.const(d.vec3i, d.vec3i(1, 2, 3)).$name("ABSTRACT");
+      export const TYPED = tgpu.const(d.vec3f, d.vec3f(1, 2, 3)).$name("TYPED");
+      export const MIXED = tgpu.const(d.vec4u, d.vec4u(1, d.vec2u(2, 3), 4)).$name("MIXED");
+      export const SPLAT = tgpu.const(d.vec4f, d.vec4f(0.5)).$name("SPLAT");
+      export const BOOLS = tgpu.const(d.vec2b, d.vec2b(true, false)).$name("BOOLS");
+      export const CONVERTED = tgpu.const(d.vec3f, d.vec3f(ABSTRACT.$)).$name("CONVERTED");
+      export const M = tgpu.const(d.mat2x2f, d.mat2x2f(1, 2, 3, 4)).$name("M");
+      export const COLUMNS = tgpu.const(d.mat3x3f, d.mat3x3f(d.vec3f(1, 0, 0), d.vec3f(0, 1, 0), d.vec3f(0, 0, 1))).$name("COLUMNS");
+      export const ZERO = tgpu.const(d.mat4x4f, d.mat4x4f()).$name("ZERO");
+      export const INFERRED = tgpu.const(d.arrayOf(d.i32, 3), [1, 2, 3]).$name("INFERRED");
+      export const FLOATS = tgpu.const(d.arrayOf(d.f32, 3), [1, 2, 3]).$name("FLOATS");
+      export const VECS = tgpu.const(d.arrayOf(d.vec2f, 2), [d.vec2f(1, 2), d.vec2f(3, 4)]).$name("VECS");
+      export const NESTED = tgpu.const(d.arrayOf(d.arrayOf(d.i32, 2), 2), [[1, 2], [3, 4]]).$name("NESTED");
+      export const N = tgpu.const(d.u32, 2).$name("N");
+      export const ZEROS = tgpu.const(d.arrayOf(d.vec2f, N.$), d.arrayOf(d.vec2f, N.$)()).$name("ZEROS");"
+    `);
+    expect(resolveConsts(code)).toMatchInlineSnapshot(`
+      "const V: vec3f = vec3f(1, 2, 3);
+
+      const ABSTRACT: vec3i = vec3i(1, 2, 3);
+
+      const TYPED: vec3f = vec3f(1, 2, 3);
+
+      const MIXED: vec4u = vec4u(1, 2, 3, 4);
+
+      const SPLAT: vec4f = vec4f(0.5);
+
+      const BOOLS: vec2<bool> = vec2<bool>(true, false);
+
+      const CONVERTED: vec3f = vec3f(1, 2, 3);
+
+      const M: mat2x2f = mat2x2f(1, 2, 3, 4);
+
+      const COLUMNS: mat3x3f = mat3x3f(1, 0, 0, 0, 1, 0, 0, 0, 1);
+
+      const ZERO: mat4x4f = mat4x4f(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+      const INFERRED: array<i32, 3> = array<i32, 3>(1i, 2i, 3i);
+
+      const FLOATS: array<f32, 3> = array<f32, 3>(1f, 2f, 3f);
+
+      const VECS: array<vec2f, 2> = array<vec2f, 2>(vec2f(1, 2), vec2f(3, 4));
+
+      const NESTED: array<array<i32, 2>, 2> = array<array<i32, 2>, 2>(array<i32, 2>(1i, 2i), array<i32, 2>(3i, 4i));
+
+      const N: u32 = 2u;
+
+      const ZEROS: array<vec2f, 2> = array<vec2f, 2>(vec2f(), vec2f());
+      const _V = V;
+      const _ABSTRACT = ABSTRACT;
+      const _TYPED = TYPED;
+      const _MIXED = MIXED;
+      const _SPLAT = SPLAT;
+      const _BOOLS = BOOLS;
+      const _CONVERTED = CONVERTED;
+      const _M = M;
+      const _COLUMNS = COLUMNS;
+      const _ZERO = ZERO;
+      const _INFERRED = INFERRED;
+      const _FLOATS = FLOATS;
+      const _VECS = VECS;
+      const _NESTED = NESTED;
+      const _N = N;
+      const _ZEROS = ZEROS;"
+    `);
+  });
+
+  it('translates structs, declared before or after the const', async () => {
+    const code = await emit({
+      'main.wesl': `
+        const N = 2u;
+        const P = Particle(vec3(1, 2, 3), 2.5, array(1, 2));
+        const EMPTY = Particle();
+        struct Particle { pos: vec3f, mass: f32, ids: array<u32, N> }
+        struct Group { first: Particle, all: array<Particle, 2> }
+        const GROUP = Group(P, array(EMPTY, P));
+        const POS = GROUP.all[1].pos;
+      `,
+    });
+    expect(code).toMatchInlineSnapshot(`
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const N = tgpu.const(d.u32, 2).$name("N");
+      export const Particle = d.struct({
+        pos: d.vec3f,
+        mass: d.f32,
+        ids: d.arrayOf(d.u32, N.$)
+      }).$name("Particle");
+      export const Group = d.struct({
+        first: Particle,
+        all: d.arrayOf(Particle, 2)
+      }).$name("Group");
+      export const P = tgpu.const(Particle, Particle({ pos: d.vec3f(1, 2, 3), mass: 2.5, ids: [1, 2] })).$name("P");
+      export const EMPTY = tgpu.const(Particle, Particle()).$name("EMPTY");
+      export const GROUP = tgpu.const(Group, Group({ first: P.$, all: [EMPTY.$, P.$] })).$name("GROUP");
+      export const POS = tgpu.const(d.vec3f, GROUP.$.all[1].pos).$name("POS");"
+    `);
+    expect(resolveConsts(code)).toMatchInlineSnapshot(`
+      "const N: u32 = 2u;
+
+      struct Particle {
+        pos: vec3f,
+        mass: f32,
+        ids: array<u32, 2>,
+      }
+
+      const P: Particle = Particle(vec3f(1, 2, 3), 2.5f, array<u32, 2>(1u, 2u));
+
+      const EMPTY: Particle = Particle(vec3f(), 0f, array<u32, 2>(0u, 0u));
+
+      struct Group {
+        first: Particle,
+        all: array<Particle, 2>,
+      }
+
+      const GROUP: Group = Group(Particle(vec3f(1, 2, 3), 2.5f, array<u32, 2>(1u, 2u)), array<Particle, 2>(Particle(vec3f(), 0f, array<u32, 2>(0u, 0u)), Particle(vec3f(1, 2, 3), 2.5f, array<u32, 2>(1u, 2u))));
+
+      const POS: vec3f = vec3f(1, 2, 3);
+      const _N = N;
+      const _P = P;
+      const _EMPTY = EMPTY;
+      const _GROUP = GROUP;
+      const _POS = POS;"
+    `);
+  });
+
+  it('translates conversions, component access and scalar operators', async () => {
+    const code = await emit({
+      'main.wesl': `
+        const V = vec4f(1, 2, 3, 4);
+        const M = mat2x2f(1, 2, 3, 4);
+        const ARR = array(1, 2, 3);
+        const X = V.x;
+        const SWIZZLE = V.zyx;
+        const ELEMENT = ARR[1];
+        const COLUMN = M[1];
+        const TO_FLOAT = f32(3);
+        const TRUNCATED = i32(2.7);
+        const TO_BOOL = bool(1);
+        const FLOAT_DIV = 7.0 / 2;
+        const INT_DIV = 7 / 2;
+        const UNSIGNED_SHIFT = 16u >> 2u;
+        const COMPARISON = FLOAT_DIV > 3.0 && !false;
+      `,
+    });
+    expect(code).toMatchInlineSnapshot(`
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const V = tgpu.const(d.vec4f, d.vec4f(1, 2, 3, 4)).$name("V");
+      export const M = tgpu.const(d.mat2x2f, d.mat2x2f(1, 2, 3, 4)).$name("M");
+      export const ARR = tgpu.const(d.arrayOf(d.i32, 3), [1, 2, 3]).$name("ARR");
+      export const X = tgpu.const(d.f32, V.$.x).$name("X");
+      export const SWIZZLE = tgpu.const(d.vec3f, V.$.zyx).$name("SWIZZLE");
+      export const ELEMENT = tgpu.const(d.i32, ARR.$[1]).$name("ELEMENT");
+      export const COLUMN = tgpu.const(d.vec2f, M.$.columns[1]).$name("COLUMN");
+      export const TO_FLOAT = tgpu.const(d.f32, 3).$name("TO_FLOAT");
+      export const TRUNCATED = tgpu.const(d.i32, d.i32(2.7)).$name("TRUNCATED");
+      export const TO_BOOL = tgpu.const(d.bool, d.bool(1)).$name("TO_BOOL");
+      export const FLOAT_DIV = tgpu.const(d.f32, 7 / 2).$name("FLOAT_DIV");
+      export const INT_DIV = tgpu.const(d.i32, Math.trunc(7 / 2)).$name("INT_DIV");
+      export const UNSIGNED_SHIFT = tgpu.const(d.u32, 16 >>> 2).$name("UNSIGNED_SHIFT");
+      export const COMPARISON = tgpu.const(d.bool, FLOAT_DIV.$ > 3 && !false).$name("COMPARISON");"
+    `);
+    expect(resolveConsts(code)).toMatchInlineSnapshot(`
+      "const V: vec4f = vec4f(1, 2, 3, 4);
+
+      const M: mat2x2f = mat2x2f(1, 2, 3, 4);
+
+      const ARR: array<i32, 3> = array<i32, 3>(1i, 2i, 3i);
+
+      const X: f32 = 1f;
+
+      const SWIZZLE: vec3f = vec3f(3, 2, 1);
+
+      const ELEMENT: i32 = 2i;
+
+      const COLUMN: vec2f = vec2f(3, 4);
+
+      const TO_FLOAT: f32 = 3f;
+
+      const TRUNCATED: i32 = 2i;
+
+      const TO_BOOL: bool = true;
+
+      const FLOAT_DIV: f32 = 3.5f;
+
+      const INT_DIV: i32 = 3i;
+
+      const UNSIGNED_SHIFT: u32 = 4u;
+
+      const COMPARISON: bool = true;
+      const _V = V;
+      const _M = M;
+      const _ARR = ARR;
+      const _X = X;
+      const _SWIZZLE = SWIZZLE;
+      const _ELEMENT = ELEMENT;
+      const _COLUMN = COLUMN;
+      const _TO_FLOAT = TO_FLOAT;
+      const _TRUNCATED = TRUNCATED;
+      const _TO_BOOL = TO_BOOL;
+      const _FLOAT_DIV = FLOAT_DIV;
+      const _INT_DIV = INT_DIV;
+      const _UNSIGNED_SHIFT = UNSIGNED_SHIFT;
+      const _COMPARISON = COMPARISON;"
+    `);
+  });
+
+  it('skips consts that cannot be translated', async () => {
+    const code = await emit({
+      'main.wesl': `
+        struct Broken { v: vec3<MyT> }
+        const FROM_BROKEN = Broken(vec3f());
+        const DEPENDS_ON_BROKEN = FROM_BROKEN.v;
+        const VECTOR_MATH = vec3f(1) + vec3f(2);
+        const UNSUPPORTED_MATRIX = mat3x2f();
+        const FINE = 1;
+      `,
+    });
+    expect(code).not.toMatch(
+      /FROM_BROKEN|DEPENDS_ON_BROKEN|VECTOR_MATH|UNSUPPORTED_MATRIX/,
+    );
+    expect(code).toMatch(/^export const FINE = /m);
+  });
+
+  it('infers the types of consts and structs of other modules', async () => {
+    const sources = {
+      'main.wesl': `
+        import package::shapes::{Circle, ORIGIN, UNIT};
+        import package::shapes as sh;
+        const C = Circle(ORIGIN, 2.0);
+        const FROM_PATH = sh::Circle(vec2(1, 2), 1);
+        const RADIUS = UNIT.radius * 2;
+        const COPY = UNIT;
+        const CIRCLES = array(UNIT, C);
+        const ALIASED = sh::Vec(1, 2);
+        const HALF_SCALE = sh::SCALE / 2;
+      `,
+      'shapes.wesl': `
+        alias Vec = vec2f;
+        const ORIGIN = vec2f(0, 0);
+        const SCALE = 3.0;
+        struct Circle { center: Vec, radius: f32 }
+        const UNIT = Circle(ORIGIN, 1.0);
+      `,
+    };
+    expect(await emit(sources)).toMatchInlineSnapshot(`
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      import { Circle, ORIGIN, SCALE as sh$SCALE, UNIT } from './shapes.wesl?typegpu';
+      export const C = tgpu.const(Circle, Circle({ center: ORIGIN.$, radius: 2 })).$name("C");
+      export const FROM_PATH = tgpu.const(Circle, Circle({ center: d.vec2f(1, 2), radius: 1 })).$name("FROM_PATH");
+      export const RADIUS = tgpu.const(d.f32, UNIT.$.radius * 2).$name("RADIUS");
+      export const COPY = tgpu.const(Circle, UNIT.$).$name("COPY");
+      export const CIRCLES = tgpu.const(d.arrayOf(Circle, 2), [UNIT.$, C.$]).$name("CIRCLES");
+      export const ALIASED = tgpu.const(d.vec2f, d.vec2f(1, 2)).$name("ALIASED");
+      export const HALF_SCALE = tgpu.const(d.f32, sh$SCALE.$ / 2).$name("HALF_SCALE");"
+    `);
+    expect(await emit(sources, 'shapes.wesl')).toMatchInlineSnapshot(`
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const ORIGIN = tgpu.const(d.vec2f, d.vec2f(0, 0)).$name("ORIGIN");
+      export const SCALE = tgpu.const(d.f32, 3).$name("SCALE");
+      export const Vec = d.vec2f;
+      export const Circle = d.struct({
+        center: Vec,
+        radius: d.f32
+      }).$name("Circle");
+      export const UNIT = tgpu.const(Circle, Circle({ center: ORIGIN.$, radius: 1 })).$name("UNIT");"
+    `);
+  });
+
+  it('imports structs that are only reached through other modules by their full path', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          import package::consts::UNIT;
+          const COPY = UNIT;
+        `,
+        'consts.wesl': `
+          import package::shapes::Circle;
+          const UNIT = Circle(vec2f(), 1.0);
+        `,
+        'shapes.wesl': `
+          struct Circle { center: vec2f, radius: f32 }
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      import { UNIT } from './consts.wesl?typegpu';
+      import { Circle as package$shapes$Circle } from './shapes.wesl?typegpu';
+      export const COPY = tgpu.const(package$shapes$Circle, UNIT.$).$name("COPY");"
+    `);
+  });
+
+  it('skips consts that use imported consts which cannot be translated', async () => {
+    const code = await emit({
+      'main.wesl': `
+        import package::other::BAD;
+        const USES_BAD = BAD + 1;
+      `,
+      'other.wesl': `
+        const BAD = max(1, 2);
+      `,
+    });
+    expect(code).not.toMatch(/USES_BAD/);
   });
 });
 
@@ -1205,6 +1580,20 @@ describe('identifier collisions', () => {
     `);
   });
 
+  it('aliases the tgpu import when a declaration is named tgpu', async () => {
+    expect(
+      await emit({
+        'main.wesl': `
+          const tgpu = 4;
+        `,
+      }),
+    ).toMatchInlineSnapshot(`
+      "import { tgpu as tgpu_1 } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const tgpu = tgpu_1.const(d.i32, 4).$name("tgpu");"
+    `);
+  });
+
   it('renames consts whose names are reserved in JS', async () => {
     expect(
       await emitValid({
@@ -1215,12 +1604,13 @@ describe('identifier collisions', () => {
         `,
       }),
     ).toMatchInlineSnapshot(`
-      "import * as d_1 from 'typegpu/data';
-      const in_ = 4;
+      "import { tgpu } from 'typegpu';
+      import * as d_1 from 'typegpu/data';
+      const in_ = tgpu.const(d_1.i32, 4).$name("in");
       export { in_ as in };
-      export const d = in_ * 2;
+      export const d = tgpu.const(d_1.i32, in_.$ * 2).$name("d");
       export const X = d_1.struct({
-        v: d_1.arrayOf(d_1.f32, d)
+        v: d_1.arrayOf(d_1.f32, d.$)
       }).$name("X");"
     `);
   });
@@ -1457,6 +1847,7 @@ describe('library imports', () => {
     struct Bar { inner: Inner, remote: Remote }
     alias FooAlias = Foo;
     const COUNT = 4;
+    const DEFAULT_INNER = Inner(1.0);
   `;
   const lygia: WeslBundle = {
     name: 'lygia',
@@ -1548,10 +1939,12 @@ describe('library imports', () => {
       projectDir,
     );
     expect(code).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data';
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
       import { Inner } from '^^/project/shaders/__wesl_lib__/lygia/util.wesl?typegpu';
       import { Remote } from '^^/project/shaders/__wesl_lib__/other_lib.wesl?typegpu';
-      export const COUNT = 4;
+      export const COUNT = tgpu.const(d.i32, 4).$name("COUNT");
+      export const DEFAULT_INNER = tgpu.const(Inner, Inner({ b: 1 })).$name("DEFAULT_INNER");
       export const Foo = d.struct({
         a: d.vec3f
       }).$name("Foo");
@@ -1645,9 +2038,33 @@ describe('library imports', () => {
       "import * as d from 'typegpu/data';
       import { COUNT as lygia$math$COUNT, COUNT as math$COUNT } from './__wesl_lib__/lygia/math.wesl?typegpu';
       export const X = d.struct({
-        a: d.arrayOf(d.f32, math$COUNT),
-        b: d.arrayOf(d.f32, lygia$math$COUNT)
+        a: d.arrayOf(d.f32, math$COUNT.$),
+        b: d.arrayOf(d.f32, lygia$math$COUNT.$)
       }).$name("X");"
+    `);
+  });
+
+  it('infers the types of library consts and structs', async () => {
+    const code = await emit(
+      {
+        'main.wesl': `
+          import lygia::math;
+          const FOO = math::Foo(vec3(1, 2, 3));
+          const INNER = math::DEFAULT_INNER;
+          const SCALED = math::COUNT * 2;
+        `,
+      },
+      'main.wesl',
+      projectDir,
+    );
+    expect(code).toMatchInlineSnapshot(`
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      import { COUNT as math$COUNT, DEFAULT_INNER as math$DEFAULT_INNER, Foo as math$Foo } from './__wesl_lib__/lygia/math.wesl?typegpu';
+      import { Inner as lygia$util$Inner } from './__wesl_lib__/lygia/util.wesl?typegpu';
+      export const FOO = tgpu.const(math$Foo, math$Foo({ a: d.vec3f(1, 2, 3) })).$name("FOO");
+      export const INNER = tgpu.const(lygia$util$Inner, math$DEFAULT_INNER.$).$name("INNER");
+      export const SCALED = tgpu.const(d.i32, math$COUNT.$ * 2).$name("SCALED");"
     `);
   });
 
@@ -1717,12 +2134,24 @@ async function runEmitted(
       `export const f32 = 'f32';
        export function arrayOf(element, length) { return { element, length }; }
        export function struct(fields) {
-         return { fields, $name(name) { this.name = name; return this; } };
+         const schema = (value) => ({ schema, value });
+         schema.fields = fields;
+         schema.$name = (name) => { schema.$$name = name; return schema; };
+         return schema;
        }`,
+    );
+    writeFileSync(
+      join(dir, 'typegpu.mjs'),
+      `export const tgpu = {
+         const(schema, value) {
+           return { schema, $: value, $name(name) { this.name = name; return this; } };
+         },
+       };`,
     );
     for (const modulePath of Object.keys(weslSrc)) {
       const code = (await emit(weslSrc, modulePath))
         .replace(`'typegpu/data'`, `'./typegpu-data.mjs'`)
+        .replace(`from 'typegpu'`, `from './typegpu.mjs'`)
         .replaceAll(/\.wesl\?typegpu'/g, `.mjs'`);
       writeFileSync(join(dir, modulePath.replace('.wesl', '.mjs')), code);
     }
@@ -1757,13 +2186,16 @@ describe('import cycles between modules', () => {
 
   it('emits declarations behind hoisted getters, reading the cycle through getters', async () => {
     expect(await emit(cyclicModules, 'a.wesl')).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data';
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
       import { $get$B1 } from './b.wesl?typegpu';
-      function $get$N() { return 2; }
-      export const N = $get$N();
+      export function $get$N() {
+        return N ??= tgpu.const(d.i32, 2).$name("N");
+      }
+      export var N = $get$N();
       export function $get$A1() {
         return A1 ??= d.struct({
-        x: d.arrayOf(d.f32, $get$N())
+        x: d.arrayOf(d.f32, $get$N().$)
       }).$name("A1");
       }
       export var A1 = $get$A1();
@@ -1884,6 +2316,48 @@ describe('import cycles between modules', () => {
       ),
     ).toBe('true true\nthrows');
   });
+
+  it.each([
+    ['a', 'b'],
+    ['b', 'a'],
+  ])(
+    'evaluates consts created from structs of the cycle when %s is imported first',
+    async (...entries) => {
+      const weslSrc = {
+        'a.wesl': `
+          import package::b::B;
+          const DEFAULT_A = A(B(1.0));
+          struct A { b: B }
+        `,
+        'b.wesl': `
+          import package::a::{A, DEFAULT_A};
+          struct B { x: f32 }
+          const COPY = DEFAULT_A;
+        `,
+      };
+      const [a, b] = entries[0] === 'a' ? ['m0', 'm1'] : ['m1', 'm0'];
+      const output = await runEmitted(
+        weslSrc,
+        entries,
+        `const { A, DEFAULT_A } = ${a};
+         const { B, COPY } = ${b};
+         console.log(JSON.stringify({
+           schemaIsA: DEFAULT_A.schema === A,
+           valueIsA: DEFAULT_A.$.schema === A,
+           memberIsB: DEFAULT_A.$.value.b.schema === B,
+           x: DEFAULT_A.$.value.b.value.x,
+           copySchemaIsA: COPY.schema === A,
+         }));`,
+      );
+      expect(JSON.parse(output)).toStrictEqual({
+        schemaIsA: true,
+        valueIsA: true,
+        memberIsB: true,
+        x: 1,
+        copySchemaIsA: true,
+      });
+    },
+  );
 
   it('names the types of a cycle that spans modules', async () => {
     const weslSrc = {
@@ -2192,21 +2666,23 @@ describe('conditions', () => {
       struct Main { values: array<Scalar, N> }
     `;
     expect(await emit({ 'main.wesl': src })).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data';
-      export const N = 2;
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const N = tgpu.const(d.i32, 2).$name("N");
       export const Scalar = d.i32;
       export const Main = d.struct({
-        values: d.arrayOf(Scalar, N)
+        values: d.arrayOf(Scalar, N.$)
       }).$name("Main");"
     `);
     expect(
       await emit({ 'main.wesl': src }, 'main.wesl', undefined, { FOO: true }),
     ).toMatchInlineSnapshot(`
-      "import * as d from 'typegpu/data';
-      export const N = 4;
+      "import { tgpu } from 'typegpu';
+      import * as d from 'typegpu/data';
+      export const N = tgpu.const(d.i32, 4).$name("N");
       export const Scalar = d.f32;
       export const Main = d.struct({
-        values: d.arrayOf(Scalar, N)
+        values: d.arrayOf(Scalar, N.$)
       }).$name("Main");"
     `);
   });

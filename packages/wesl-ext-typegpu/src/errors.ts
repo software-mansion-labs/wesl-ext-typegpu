@@ -1,4 +1,4 @@
-import type { AliasElem, StructElem } from 'wesl';
+import type { AliasElem, DeclIdentElem, StructElem } from 'wesl';
 
 /** A range of offsets into a module's source, as carried by every WESL AST element. */
 export interface Span {
@@ -19,6 +19,18 @@ export class TranslationError extends Error {
     super(message);
     this.name = 'TranslationError';
     this.span = span;
+  }
+}
+
+/**
+ * Thrown when a WGSL expression has no JS equivalent we can emit.
+ * `translateExpression` attaches the innermost expression it failed on, and callers add the context
+ * (struct, member, const) the expression came from.
+ */
+export class UntranslatableExpressionError extends TranslationError {
+  constructor(message: string, span?: Span) {
+    super(message, span);
+    this.name = 'UntranslatableExpressionError';
   }
 }
 
@@ -84,7 +96,7 @@ export function quoteSource(src: string, span: Span): string {
 }
 
 export function locate(
-  decl: StructElem | AliasElem,
+  decl: Pick<StructElem | AliasElem, 'name'> | { name: DeclIdentElem },
   offset: number,
 ): ErrorLocation {
   const { debugFilePath, src } = decl.name.srcModule;
